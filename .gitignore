@@ -1,1 +1,52 @@
+libspatialite-5.1.0/*
+.ipynb_checkpoints/
+data/
+imagery_utils/
+*.dll
+*.exe
+*.sqlite3
+*.db
+*.log
+python
+gaia/__pycache__/*
+static/admin/*
+static/gis/*
+static/uswds/img/material-icons/*
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+gaia/secrets.json
+.vscode/launch.json
+.vscode/settings.json
+staticfiles/*
+animal/management/commands/__pycache__/*
+external/
+gaia.log
+animal/external/*
 
+# Celery Beat schedule files
+celerybeat-schedule*
+celerybeat.pid
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Runtime token files
+mgp_token.json
+*.token
+
+# Windows Zone.Identifier files
+*:Zone.Identifier
+
+
+# Exported Azure Container App YAMLs and backups
+azure/*.yaml
+azure/*.yaml.*.bak
+logs/flower.db.bak
+logs/flower.db.dat
+logs/flower.db.dir
+
+.github/copilot-instructions.md

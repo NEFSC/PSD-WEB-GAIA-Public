@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Flower Monitoring - Service Unavailable{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="alert alert-warning" role="alert">
+                <h4 class="alert-heading">🌸 Flower Monitoring Service Unavailable</h4>
+                <p>{{ error }}</p>
+                <hr>
+                <p class="mb-0">
+                    <strong>Service URL:</strong> <code>{{ service_url }}</code><br>
+                    <strong>Troubleshooting:</strong>
+                    <ul class="mt-2">
+                        <li>Check if the Flower container app is running</li>
+                        <li>Verify the Redis broker connection</li>
+                        <li>Check container app logs for errors</li>
+                    </ul>
+                </p>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5>Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <a href="{% url 'admin:index' %}" class="btn btn-primary">
+                        🔧 Django Admin
+                    </a>
+                    <a href="javascript:window.location.reload()" class="btn btn-secondary">
+                        🔄 Retry Connection
+                    </a>
+                    <a href="{% url 'landing_page' %}" class="btn btn-outline-primary">
+                        🏠 Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

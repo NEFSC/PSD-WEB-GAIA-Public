@@ -1,0 +1,296 @@
+{% load static %}
+{% include 'sections/header.html' %}
+
+<style>
+  .load-points-layout {
+    display: block;
+  }
+
+  .load-points-layout--with-preview {
+    display: grid;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  @media (min-width: 64em) {
+    .load-points-layout--with-preview {
+      grid-template-columns: minmax(18rem, 22rem) minmax(0, 1fr);
+      gap: 2rem;
+    }
+  }
+
+  .load-points-form {
+    max-width: 30rem;
+  }
+
+  .load-points-preview,
+  .load-points-controls {
+    min-width: 0;
+  }
+
+  #preview-map {
+    width: 100%;
+    height: 560px;
+    border: 1px solid #dfe1e2;
+    border-radius: 4px;
+  }
+
+  .preview-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+</style>
+
+<section class="usa-section padding-top-0">
+  <div class="grid-container" style="max-width: 120rem;">
+    <div class="grid-row">
+      <div class="grid-col-12">
+        <h1 class="margin-bottom-0">Load Points</h1>
+        {% if project %}
+          <p class="site-subheading margin-top-1">{{ project.label }}</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if messages %}
+      <div class="grid-row">
+        <div class="grid-col-12">
+          {% for message in messages %}
+            <div class="usa-alert {% if message.tags == 'error' %}usa-alert--error{% elif message.tags == 'success' %}usa-alert--success{% elif message.tags == 'warning' %}usa-alert--warning{% else %}usa-alert--info{% endif %} margin-top-2" role="alert">
+              <div class="usa-alert__body">
+                <p class="usa-alert__text">{{ message }}</p>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    <div class="load-points-layout {% if show_preview %}load-points-layout--with-preview{% endif %} margin-top-3">
+      <div class="load-points-controls">
+        <form method="post" enctype="multipart/form-data" class="usa-form load-points-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="preview_points">
+
+          <div class="usa-form-group {% if form.geojson_files.errors %}usa-form-group--error{% endif %}">
+            <label class="usa-label" for="{{ form.geojson_files.id_for_label }}"><strong>{{ form.geojson_files.label }}</strong></label>
+            <span class="usa-hint">Upload one or more GeoJSON files. Vendor IDs are parsed from each GeoJSON.</span>
+            {{ form.geojson_files }}
+            {% for err in form.geojson_files.errors %}
+              <span class="usa-error-message">{{ err }}</span>
+            {% endfor %}
+          </div>
+
+          <div class="usa-form-group {% if form.vendor_id_select.errors %}usa-form-group--error{% endif %}">
+            <label class="usa-label" for="{{ form.vendor_id_select.id_for_label }}"><strong>{{ form.vendor_id_select.label }}</strong></label>
+            <span class="usa-hint">
+              {% if available_cog_vendor_count %}
+                {{ available_cog_vendor_count }} Vendor ID(s) are available for this project.
+              {% else %}
+                No vendor IDs are currently available for this project.
+              {% endif %}
+            </span>
+            {{ form.vendor_id_select }}
+            {% for err in form.vendor_id_select.errors %}
+              <span class="usa-error-message">{{ err }}</span>
+            {% endfor %}
+          </div>
+
+          <button type="submit" class="usa-button">Preview Points</button>
+        </form>
+      </div>
+
+      {% if show_preview %}
+        <div class="load-points-preview">
+          <h3 class="margin-bottom-1">Preview Map</h3>
+          <p class="margin-top-0 margin-bottom-2">
+            Previewing <strong>{{ preview_total_points }}</strong> point(s)
+            from <strong>{{ preview_file_count }}</strong> file(s)
+            for Vendor ID(s) <strong>{{ preview_vendor_ids|join:", " }}</strong>.
+          </p>
+
+          <p class="margin-top-0 margin-bottom-2">
+            Parsed vendor ID: <strong>{{ preview_parsed_vendor_id|default:"n/a" }}</strong>.
+            {% if preview_selected_vendor_id %}
+              Selected vendor ID for load: <strong>{{ preview_selected_vendor_id }}</strong>.
+            {% endif %}
+          </p>
+
+          {% if preview_result %}
+            <p class="margin-top-0 margin-bottom-2">
+              Ready to insert: {{ preview_result.loaded }}. Skipped: {{ preview_result.skipped }}.
+              Duplicates: {{ preview_result.duplicates }}.
+            </p>
+          {% endif %}
+
+          {% if cog_warning %}
+            <div class="usa-alert usa-alert--warning usa-alert--slim margin-bottom-2" role="alert">
+              <div class="usa-alert__body">
+                <p class="usa-alert__text">
+                  No COG found for vendor ID(s): {{ missing_cog_vendor_ids|join:", " }}.
+                </p>
+              </div>
+            </div>
+          {% endif %}
+
+          <div id="preview-map"></div>
+          {{ preview_points|json_script:"preview-points-data" }}
+          {{ preview_cog_paths|json_script:"preview-cog-paths-data" }}
+
+          <div class="preview-actions margin-top-2">
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="load_points">
+              <button type="submit" class="usa-button">Load Points</button>
+            </form>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+{% if show_preview %}
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.1.0/ol.css" />
+  <script src="https://cdn.jsdelivr.net/npm/geotiff"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ol@v10.1.0/dist/ol.js"></script>
+  <script>
+    window.addEventListener("DOMContentLoaded", function () {
+      if (!window.ol) {
+        return;
+      }
+
+      var dataElement = document.getElementById("preview-points-data");
+      if (!dataElement) {
+        return;
+      }
+
+      var points = [];
+      try {
+        points = JSON.parse(dataElement.textContent || "[]");
+        if (typeof points === "string") {
+          points = JSON.parse(points || "[]");
+        }
+      } catch (err) {
+        points = [];
+      }
+      if (!Array.isArray(points)) {
+        points = [];
+      }
+
+      var baseLayer = new ol.layer.Tile({
+        source: new ol.source.OSM(),
+      });
+      baseLayer.setZIndex(0);
+
+      var features = points.map(function (pointData) {
+        return new ol.Feature({
+          geometry: new ol.geom.Point(
+            ol.proj.fromLonLat([Number(pointData.lon), Number(pointData.lat)])
+          ),
+        });
+      });
+
+      var vectorLayer = new ol.layer.Vector({
+        source: new ol.source.Vector({ features: features }),
+        style: new ol.style.Style({
+          image: new ol.style.Circle({
+            radius: 4,
+            fill: new ol.style.Fill({ color: "#005ea2" }),
+            stroke: new ol.style.Stroke({ color: "#ffffff", width: 1 }),
+          }),
+        }),
+      });
+      vectorLayer.setZIndex(20);
+
+      var map = new ol.Map({
+        target: "preview-map",
+        layers: [baseLayer, vectorLayer],
+        view: new ol.View({
+          center: ol.proj.fromLonLat([-98.5795, 39.8283]),
+          zoom: 4,
+        }),
+      });
+
+        var cogPathsElement = document.getElementById("preview-cog-paths-data");
+        var previewCogPaths = [];
+        if (cogPathsElement) {
+          try {
+            previewCogPaths = JSON.parse(cogPathsElement.textContent || "[]");
+          } catch (error) {
+            previewCogPaths = [];
+          }
+        }
+        if (Array.isArray(previewCogPaths) && previewCogPaths.length > 0) {
+          var cogReadyCount = 0;
+          var cogErrorCount = 0;
+
+          previewCogPaths.forEach(function (previewCogPath, index) {
+            var encodedCogPath = String(previewCogPath || "")
+              .split("/")
+              .map(function (segment) { return encodeURIComponent(segment); })
+              .join("/");
+            if (!encodedCogPath) {
+              return;
+            }
+
+            var cogUrl = new URL("/cogs/" + encodedCogPath + "/", window.location.origin).toString();
+            var cogSource = new ol.source.GeoTIFF({
+              sources: [{ url: cogUrl }],
+            });
+
+            cogSource.on("change", function () {
+              var state = cogSource.getState();
+              if (state === "ready") {
+                cogReadyCount += 1;
+              } else if (state === "error") {
+                cogErrorCount += 1;
+              }
+              console.info(
+                "COG overlays loaded:",
+                cogReadyCount + " / " + previewCogPaths.length,
+                "Failed:",
+                cogErrorCount
+              );
+            });
+
+            var cogStyleVariables = {
+              exposure: 0,
+              contrast: 0,
+              saturation: 0,
+            };
+            var cogLayer = new ol.layer.WebGLTile({
+              style: {
+                exposure: ["var", "exposure"],
+                contrast: ["var", "contrast"],
+                saturation: ["var", "saturation"],
+                variables: cogStyleVariables,
+              },
+              source: cogSource,
+              opacity: 1,
+            });
+
+            cogLayer.setZIndex(10 + index);
+            map.getLayers().insertAt(1 + index, cogLayer);
+          });
+        }
+
+      if (features.length > 0) {
+        var extent = vectorLayer.getSource().getExtent();
+        map.getView().fit(extent, {
+          padding: [24, 24, 24, 24],
+          maxZoom: 18,
+          duration: 250,
+        });
+      }
+
+      window.setTimeout(function () {
+        map.updateSize();
+      }, 0);
+    });
+  </script>
+{% endif %}
+
+{% include 'sections/footer.html' %}

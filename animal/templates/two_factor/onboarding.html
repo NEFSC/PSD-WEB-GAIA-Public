@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block title %}Two-Factor Authentication Required{% endblock %}
+
+{% block content %}
+<div class="usa-section padding-top-4">
+  <div class="grid-container">
+    <div class="grid-row">
+      <div class="grid-col-12">
+        <div class="usa-alert usa-alert--info" role="alert">
+          <div class="usa-alert__body">
+            <h4 class="usa-alert__heading">Security Enhancement Required</h4>
+            <p class="usa-alert__text">
+              To improve the security of GAIA, all accounts now require two-factor authentication (2FA). 
+              This adds an extra layer of protection to your account.
+            </p>
+          </div>
+        </div>
+
+        <h1>Welcome to Enhanced Security</h1>
+        
+        <div class="grid-row grid-gap margin-top-4">
+          <div class="grid-col-6">
+            <h2>What is Two-Factor Authentication?</h2>
+            <p>
+              Two-factor authentication (2FA) requires two forms of verification to access your account:
+            </p>
+            <ol class="usa-list">
+              <li><strong>Something you know:</strong> Your password</li>
+              <li><strong>Something you have:</strong> Your smartphone with an authenticator app</li>
+            </ol>
+            
+            <p>
+              Even if someone discovers your password, they won't be able to access your account 
+              without the second factor from your phone.
+            </p>
+
+            <h3>What You'll Need</h3>
+            <ul class="usa-list">
+              <li>A smartphone (iPhone or Android)</li>
+              <li>An authenticator app (we'll help you choose one)</li>
+              <li>About 5 minutes to complete setup</li>
+            </ul>
+          </div>
+
+          <div class="grid-col-6">
+            <div class="usa-card">
+              <div class="usa-card__container">
+                <div class="usa-card__body">
+                  <h3 class="usa-card__heading">Setup Process</h3>
+                  <ol class="usa-list">
+                    <li>Install an authenticator app on your phone</li>
+                    <li>Scan a QR code to link your account</li>
+                    <li>Enter a verification code to confirm setup</li>
+                    <li>Save backup codes for emergency access</li>
+                  </ol>
+                  
+                  <div class="margin-top-3">
+                    <a href="{% url 'webauthn_setup' %}" class="usa-button">
+                      Set Up Two-Factor Authentication
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="usa-alert usa-alert--warning margin-top-3" role="alert">
+              <div class="usa-alert__body">
+                <h4 class="usa-alert__heading">Need Help?</h4>
+                <p class="usa-alert__text">
+                  If you need assistance with setup or don't have access to a smartphone, 
+                  please contact your system administrator for alternative arrangements.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="margin-top-4">
+          <h2>Recommended Authenticator Apps</h2>
+          <div class="grid-row grid-gap">
+            <div class="grid-col-3">
+              <div class="usa-card">
+                <div class="usa-card__container">
+                  <div class="usa-card__body">
+                    <h4 class="usa-card__heading">Google Authenticator</h4>
+                    <p>Free, simple, and widely used</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="grid-col-3">
+              <div class="usa-card">
+                <div class="usa-card__container">
+                  <div class="usa-card__body">
+                    <h4 class="usa-card__heading">Microsoft Authenticator</h4>
+                    <p>Integrates with Microsoft accounts</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="grid-col-3">
+              <div class="usa-card">
+                <div class="usa-card__container">
+                  <div class="usa-card__body">
+                    <h4 class="usa-card__heading">Authy</h4>
+                    <p>Cloud backup and multi-device sync</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="grid-col-3">
+              <div class="usa-card">
+                <div class="usa-card__container">
+                  <div class="usa-card__body">
+                    <h4 class="usa-card__heading">1Password</h4>
+                    <p>If you use 1Password for passwords</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="margin-top-4 text-center">
+            <a href="{% url 'webauthn_setup' %}" class="usa-button usa-button--big">
+            Get Started with Setup
+            </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

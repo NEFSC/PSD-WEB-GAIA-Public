@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block title %}Two-Factor Authentication Profile{% endblock %}
+
+{% block content %}
+<div class="usa-section padding-top-4">
+  <div class="grid-container">
+    <div class="grid-row">
+      <div class="grid-col-12">
+        <h1>Two-Factor Authentication Settings</h1>
+        
+        {% if default_device %}
+          <div class="usa-alert usa-alert--success" role="alert">
+            <div class="usa-alert__body">
+              <h4 class="usa-alert__heading">Two-Factor Authentication Enabled</h4>
+              <p class="usa-alert__text">
+                Your account is protected with two-factor authentication.
+              </p>
+            </div>
+          </div>
+
+          <div class="grid-row grid-gap margin-top-4">
+            <div class="grid-col-6">
+              <h2>Current Devices</h2>
+              <div class="usa-card">
+                <div class="usa-card__container">
+                  <div class="usa-card__body">
+                    <h3 class="usa-card__heading">{{ default_device.name }}</h3>
+                    <p>Configured on: {{ default_device.confirmed|date:"F d, Y" }}</p>
+                    <p>Status: <strong>Active</strong></p>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- YubiKey Devices Section -->
+              {% if yubikey_devices %}
+                <h3 class="margin-top-3">YubiKey Devices</h3>
+                {% for device in yubikey_devices %}
+                  <div class="usa-card margin-bottom-2">
+                    <div class="usa-card__container">
+                      <div class="usa-card__body">
+                        <div class="display-flex flex-justify">
+                          <div>
+                            <h4 class="usa-card__heading margin-bottom-05">
+                              <i class="fas fa-key text-primary"></i> YubiKey Device
+                            </h4>
+                            <p class="margin-bottom-05"><small>Public ID: {{ device.public_id }}</small></p>
+                            <p><small>Service: {{ device.service.name }}</small></p>
+                          </div>
+                          <div>
+                            <a href="{% url 'remove_yubikey' device.id %}" 
+                               class="usa-button usa-button--secondary usa-button--unstyled text-secondary"
+                               onclick="return confirm('Remove this YubiKey from your account?')"
+                               title="Remove YubiKey">
+                              <i class="fas fa-trash"></i>
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                {% endfor %}
+              {% endif %}
+            </div>
+
+            <div class="grid-col-6">
+              <h2>Actions</h2>
+              <div class="usa-button-group usa-button-group--vertical">
+                <a href="{% url 'yubikey_setup' %}" class="usa-button usa-button--outline">
+                  <i class="fas fa-key"></i> Add YubiKey Device
+                </a>
+                <!-- <a href="{% url 'two_factor:backup_tokens' %}" class="usa-button usa-button--outline">
+                  Generate Backup Tokens
+                </a> -->
+                <a href="{% url 'two_factor:disable' %}" class="usa-button usa-button--secondary">
+                  Disable Two-Factor Auth
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- {% if backup_tokens %}
+          <div class="margin-top-4">
+            <h2>Backup Tokens</h2>
+            <div class="usa-alert usa-alert--info" role="alert">
+              <div class="usa-alert__body">
+                <h4 class="usa-alert__heading">You have {{ backup_tokens|length }} backup tokens remaining</h4>
+                <p class="usa-alert__text">
+                  These tokens can be used once each if you lose access to your authenticator app.
+                </p>
+              </div>
+            </div>
+          </div>
+          {% endif %} -->
+
+        {% else %}
+          <div class="usa-alert usa-alert--warning" role="alert">
+            <div class="usa-alert__body">
+              <h4 class="usa-alert__heading">Two-Factor Authentication Not Configured</h4>
+              <p class="usa-alert__text">
+                Your account is not yet protected with two-factor authentication. 
+                Set it up now to enhance your account security.
+              </p>
+            </div>
+          </div>
+
+          <div class="margin-top-3">
+            <a href="{% url 'two_factor:setup' %}" class="usa-button">
+              Set Up Two-Factor Authentication
+            </a>
+          </div>
+        {% endif %}
+
+        <div class="margin-top-4">
+          <h2>About Two-Factor Authentication</h2>
+          <p>
+            Two-factor authentication (2FA) adds an extra layer of security to your account. 
+            Even if someone knows your password, they won't be able to access your account 
+            without the second factor - a time-based code from your authenticator app.
+          </p>
+          
+          <h3>Supported Authentication Methods</h3>
+          <ul class="usa-list">
+            <li><strong>Authenticator Apps:</strong> Google Authenticator, Microsoft Authenticator, Authy, 1Password, and any TOTP-compatible app</li>
+            <li><strong>Hardware Keys:</strong> YubiKey devices for the strongest possible security</li>
+          </ul>
+        </div>
+
+        <div class="margin-top-4">
+          <a href="/" class="usa-button usa-button--outline">Back to GAIA</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

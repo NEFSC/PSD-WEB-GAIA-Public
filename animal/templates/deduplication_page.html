@@ -1,0 +1,634 @@
+{% load static %}
+{% include 'sections/header.html' %}
+<style>
+  #gdal-map {
+    height: 50vh;
+    width: 100%;
+    position: relative;
+  }
+  #layer-switcher {
+    position: absolute;
+    bottom: 4rem;
+    right: 1rem;
+    width: 8rem;
+    background: white;
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+  }
+  .ol-viewport .ol-overlaycontainer-stopevent .ol-zoom {
+    top: .5em;
+    right: .5em;
+    left: auto;
+  }
+  
+  .ol-dragbox {
+    background-color: rgba(255, 255, 0, 0.3);
+    border: 2px dashed #ffff00;
+  }
+  
+  kbd {
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    padding: 2px 4px;
+    font-family: monospace;
+    font-size: 0.9em;
+  }
+  
+  .main-poi-row {
+    background-color: #f7fafd;
+  }
+  
+  .duplicate-poi-row {
+    background-color: #fff2f2;
+  }
+</style>
+
+<section class="usa-section padding-top-0 padding-bottom-0">
+  <div class="grid-row">
+    <div class="grid-col-3"></div>
+    <div class="grid-col-3">
+      <h1 class="margin-bottom-0">Duplicate POIs</h1>
+      {% if project %}
+        <p class="site-subheading margin-top-1" style="white-space: nowrap;">{{ project.label }}</p>
+      {% endif %}
+    </div>
+  </div>
+  
+  {% if error_message %}
+  <div class="usa-alert usa-alert--error">
+    <div class="usa-alert__body">
+      <h3 class="usa-alert__heading">Error</h3>
+      <p class="usa-alert__text">{{ error_message }}</p>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="grid-row flex-justify">
+    <div class="grid-col-3 padding-left-2 padding-top-2">
+      {% if main_poi %}
+        <p><strong>Main POI:</strong> {{ main_poi.id }}</p>
+        <p><strong>Vendor ID:</strong> {{ vendor_id }}</p>
+        <p><strong>Duplicates Found:</strong> {{ nearby_count }}</p>
+        
+        <form id="deduplication_form" method="post">
+          {% csrf_token %}
+          
+          <div class="usa-section-heading padding-top-2">
+            <h2>POI Details</h2>
+          </div>
+          <div class="usa-table-container--scrollable" tabindex="0" style="max-height: 300px; overflow-y: auto;">
+            <table class="usa-table usa-table--stacked-header usa-table--sticky-header">
+              <thead>
+                <tr>
+                  <th scope="col">POI ID</th>
+                  <th scope="col">Type</th>
+                  <th scope="col">Distance to Main POI</th>
+                  <th scope="col">Species</th>
+                </tr>
+              </thead>
+              <tbody id="poi-details-table">
+                <tr class="main-poi-row">
+                  <td data-label="POI ID">
+                    <a href="/project/{{ project_id }}/annotation/{{ main_poi.id }}/">{{ main_poi.id }}</a>
+                  </td>
+                  <td data-label="Type">
+                    <span class="usa-tag">Main POI</span>
+                  </td>
+                  <td data-label="Distance">-</td>
+                  <td data-label="Species">{{ main_poi.final_species.label|default:"Unknown" }}</td>
+                </tr>
+                {% for nearby_item in nearby_pois %}
+                <tr data-poi-id="{{ nearby_item.poi.id }}" class="poi-table-row duplicate-poi-row" style="display: none;">
+                  <td data-label="POI ID">
+                    <a href="/project/{{ project_id }}/annotation/{{ nearby_item.poi.id }}/">{{ nearby_item.poi.id }}</a>
+                  </td>
+                  <td data-label="Type">
+                    <span class="usa-tag usa-tag--secondary">Duplicate</span>
+                  </td>
+                  <td data-label="Distance">{{ nearby_item.distance|floatformat:1 }}m</td>
+                  <td data-label="Species">{{ nearby_item.poi.final_species.label|default:"Unknown" }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          
+          <div class="margin-top-2">
+            <p><strong>Selected for deletion:</strong> <span id="selected-count">0</span> POI(s)</p>
+          </div>
+          
+          <div class="grid-row padding-top-4 padding-2">
+            <button
+              class="usa-button margin-bottom-2"
+              type="button"
+              id="mark-reviewed"
+            >
+              All annotations are valid
+            </button>
+            <button
+              class="usa-button usa-button--secondary margin-bottom-2"
+              type="button"
+              id="delete-selected"
+              disabled
+              style="display: none;"
+            >
+              Delete Selected POIs
+            </button>
+            <a href="/project/{{ project_id }}/deduplication/" class="usa-button usa-button--outline margin-top-2">
+              Back to Deduplication List
+            </a>
+          </div>
+          <input type="hidden" name="action" value="" id="dedup-action">
+        </form>
+      {% endif %}
+    </div>
+    
+    <div class="grid-container" style="width: 55%;max-width: 100%;height:70vh;">
+      <div id="osm-map" class="map padding-bottom-5" style="position: absolute; top: inherit; left: inherit; width: 55%; height: 70vh; z-index: 1;"></div>
+      <div id="gdal-map" class="map padding-bottom-5" style="position: absolute; top: inherit; left: inherit; width: 55%; height: 70vh; z-index: 2;">
+        <div id="layer-switcher">
+          <label>
+            <input type="radio" name="layer" value="street" />
+            Street Map
+          </label>
+          <br />
+          <label>
+            <input type="radio" name="layer" value="satellite" checked />
+            Satellite
+          </label><br>
+          <label>
+            <input type="checkbox" name="pointer" value="checked" checked />
+            Show POIs
+          </label>
+        </div>
+        <div id="map-scale-indicator" style="position: absolute; bottom: 10px; left: 10px; background: rgba(255,255,255,0.95); padding: 8px 12px; border-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 1002; border: 1px solid #ddd; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; user-select: none; pointer-events: none;">
+          <div id="scale-bar" style="height: 4px; background: #333; margin-bottom: 4px; border-right: 2px solid #333; border-left: 2px solid #333;"></div>
+          <div id="scale-text" style="font-size: 11px; font-weight: 600; color: #333; text-align: center;">-- m</div>
+        </div>
+      </div>
+      <div class="grid-row controls flex-row" style="position:relative; top:69vh; z-index: 3;">
+        <div class="grid-col">
+          <label for="exposure">Brightness: </label>
+          <input type="range" id="exposure" min="-0.5" max="0.5" step="0.1" value="0" />
+        </div>
+        <div class="grid-col">
+          <label for="contrast">Contrast: </label>
+          <input type="range" id="contrast" min="-0.5" max="0.5" step="0.1" value="0" />
+        </div>
+        <div class="grid-col">
+          <label for="saturation">Saturation: </label>
+          <input type="range" id="saturation" min="-0.5" max="0.5" step="0.1" value="0" />
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/geotiff"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.1.0/ol.css" />
+<script src="https://cdn.jsdelivr.net/npm/ol@v10.1.0/dist/ol.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.6.0/proj4.js"></script>
+
+<script>
+// Global variables
+const latitude = {{ latitude }};
+const longitude = {{ longitude }};
+const cogUrl = "{{ cogurl }}";
+const poisData = {{ pois_json|safe }};
+let gdalMap;
+let osmMap;
+let vectorLayer;
+let selectedPOIs = new Set(); // Track selected POI IDs for deletion
+const mainPoiId = {{ main_poi.id }};
+
+// Map Initialization
+window.onload = function() {
+  initializeMaps();
+};
+
+function initializeMaps() {
+  // Create features for all POIs
+  const features = [];
+  
+  poisData.forEach((poi) => {
+    const feature = new ol.Feature({
+      geometry: new ol.geom.Point(ol.proj.fromLonLat([poi.longitude, poi.latitude])),
+      name: `POI ${poi.id}`,
+      poiId: poi.id,
+      catalogId: poi.catalog_id,
+      finalClassification: poi.final_classification,
+      finalSpecies: poi.final_species,
+      distance: poi.distance,
+      isMain: poi.is_main
+    });
+    
+    // Different styling for main POI vs duplicates
+    if (poi.is_main) {
+      // Main POI - simple blue
+      feature.setStyle(new ol.style.Style({
+        image: new ol.style.Circle({
+          fill: new ol.style.Fill({ color: 'rgba(0, 102, 204, 0.15)' }),
+          stroke: new ol.style.Stroke({ 
+            color: '#0066cc',
+            width: 2
+          }),
+          radius: 28
+        }),
+        text: new ol.style.Text({
+          text: `${poi.id}`,
+          fill: new ol.style.Fill({ color: '#0066cc' }),
+          stroke: new ol.style.Stroke({ color: '#fff', width: 2 }),
+          font: 'bold 13px Arial',
+          offsetY: -35
+        })
+      }));
+    } else {
+      // Duplicate POI - red
+      feature.setStyle(new ol.style.Style({
+        image: new ol.style.Circle({
+          fill: new ol.style.Fill({ color: 'rgba(255, 0, 0, 0.2)' }),
+          stroke: new ol.style.Stroke({ 
+            color: '#ff0000',
+            width: 3,
+            lineDash: [3, 3]
+          }),
+          radius: 32
+        }),
+        text: new ol.style.Text({
+          text: `${poi.id}`,
+          fill: new ol.style.Fill({ color: '#ff0000' }),
+          stroke: new ol.style.Stroke({ color: '#fff', width: 2 }),
+          font: 'bold 14px Arial',
+          offsetY: -40
+        })
+      }));
+    }
+    
+    features.push(feature);
+  });
+
+  const cogSource = new ol.source.GeoTIFF({
+    sources: [{
+      url: new URL(cogUrl, window.location.origin).toString()
+    }]
+  });
+  
+  const baseLayer = new ol.layer.Tile({ source: new ol.source.OSM() });
+  const vectorSource = new ol.source.Vector({ features: features });
+  vectorLayer = new ol.layer.Vector({
+    source: vectorSource
+  });
+
+  const variables = {
+    exposure: 0,
+    contrast: 0,
+    saturation: 0,
+  };
+
+  const cogLayer = new ol.layer.WebGLTile({
+    style: {
+      exposure: ['var', 'exposure'],
+      contrast: ['var', 'contrast'],
+      saturation: ['var', 'saturation'],
+      variables: variables,
+    },
+    source: cogSource,
+    attributions: 'GAIA',
+  });
+
+  // Load saved settings and initialize controls
+  window.ImageAdjustmentPersistence.initializeControls(variables, cogLayer);
+  
+  // Setup event listeners for persistence
+  window.ImageAdjustmentPersistence.setupEventListeners(cogLayer);
+
+  osmMap = new ol.Map({
+    target: 'osm-map',
+    layers: [baseLayer, vectorLayer],
+    view: new ol.View({
+      center: ol.proj.fromLonLat([longitude, latitude]),
+      zoom: 18,
+    }),
+  });
+
+  gdalMap = new ol.Map({
+    target: 'gdal-map',
+    layers: [baseLayer, cogLayer, vectorLayer],
+    view: osmMap.getView(),
+  });
+
+  // Layer switcher functionality
+  document.querySelectorAll('input[name="layer"]').forEach((input) => {
+    input.addEventListener('change', (event) => {
+      const value = event.target.value;
+      baseLayer.setVisible(value === 'street');
+      cogLayer.setVisible(value === 'satellite');
+    });
+  });
+  
+  document.querySelector('input[name="pointer"]').addEventListener('change', (event) => {
+    vectorLayer.setVisible(event.target.checked);
+  });
+  
+  // Add area selection functionality
+  const boxSelectInteraction = new ol.interaction.DragBox({
+    condition: ol.events.condition.platformModifierKeyOnly
+  });
+  
+  gdalMap.addInteraction(boxSelectInteraction);
+  
+  boxSelectInteraction.on('boxstart', function() {
+    const mapElement = document.getElementById('gdal-map');
+    mapElement.style.cursor = 'crosshair';
+  });
+  
+  boxSelectInteraction.on('boxend', function() {
+    const extent = boxSelectInteraction.getGeometry().getExtent();
+    const selectedFeatures = [];
+    
+    vectorLayer.getSource().forEachFeatureInExtent(extent, function(feature) {
+      // Allow selection of all POIs (including the main POI)
+      selectedFeatures.push(feature);
+    });
+    
+    selectedFeatures.forEach(function(feature) {
+      const poiId = feature.get('poiId');
+      
+      if (selectedPOIs.has(poiId)) {
+        selectedPOIs.delete(poiId);
+        updateFeatureStyle(feature, false);
+      } else {
+        selectedPOIs.add(poiId);
+        updateFeatureStyle(feature, true);
+      }
+    });
+    
+    updatePOISelection();
+    
+    const mapElement = document.getElementById('gdal-map');
+    mapElement.style.cursor = '';
+  });
+  
+  // Add click handler for individual POI selection
+  gdalMap.on('click', function(evt) {
+    if (!evt.originalEvent.ctrlKey && !evt.originalEvent.metaKey) {
+      const feature = gdalMap.forEachFeatureAtPixel(evt.pixel, function(feature) {
+        return feature;
+      });
+      
+      if (feature) {
+        const poiId = feature.get('poiId');
+        
+        if (selectedPOIs.has(poiId)) {
+          selectedPOIs.delete(poiId);
+          updateFeatureStyle(feature, false);
+        } else {
+          selectedPOIs.add(poiId);
+          updateFeatureStyle(feature, true);
+        }
+        
+        updatePOISelection();
+      }
+    }
+  });
+  
+  // Show all POI rows in the table
+  updatePOITable();
+}
+
+function updateFeatureStyle(feature, isSelected) {
+  const poi = poisData.find(p => p.id === feature.get('poiId'));
+  if (!poi) return;
+  
+  if (isSelected) {
+    // Selected style - yellow highlight for both main and duplicate POIs
+    feature.setStyle(new ol.style.Style({
+      image: new ol.style.Circle({
+        fill: new ol.style.Fill({ color: 'rgba(255, 255, 0, 0.6)' }),
+        stroke: new ol.style.Stroke({ 
+          color: '#ffff00',
+          width: 4
+        }),
+        radius: 35
+      }),
+      text: new ol.style.Text({
+        text: poi.is_main ? `MAIN: ${poi.id} ✓` : `${poi.id} ✓`,
+        fill: new ol.style.Fill({ color: '#000' }),
+        stroke: new ol.style.Stroke({ color: '#fff', width: 2 }),
+        font: 'bold 14px Arial',
+        offsetY: -45
+      })
+    }));
+  } else {
+    // Default style - different for main vs duplicate POIs
+    if (poi.is_main) {
+      // Main POI - simple blue
+      feature.setStyle(new ol.style.Style({
+        image: new ol.style.Circle({
+          fill: new ol.style.Fill({ color: 'rgba(0, 102, 204, 0.15)' }),
+          stroke: new ol.style.Stroke({ 
+            color: '#0066cc',
+            width: 2
+          }),
+          radius: 28
+        }),
+        text: new ol.style.Text({
+          text: `${poi.id}`,
+          fill: new ol.style.Fill({ color: '#0066cc' }),
+          stroke: new ol.style.Stroke({ color: '#fff', width: 2 }),
+          font: 'bold 13px Arial',
+          offsetY: -35
+        })
+      }));
+    } else {
+      // Duplicate POI - red
+      feature.setStyle(new ol.style.Style({
+        image: new ol.style.Circle({
+          fill: new ol.style.Fill({ color: 'rgba(255, 0, 0, 0.2)' }),
+          stroke: new ol.style.Stroke({ 
+            color: '#ff0000',
+            width: 3,
+            lineDash: [3, 3]
+          }),
+          radius: 32
+        }),
+        text: new ol.style.Text({
+          text: `${poi.id}`,
+          fill: new ol.style.Fill({ color: '#ff0000' }),
+          stroke: new ol.style.Stroke({ color: '#fff', width: 2 }),
+          font: 'bold 14px Arial',
+          offsetY: -40
+        })
+      }));
+    }
+  }
+}
+
+function updatePOISelection() {
+  // Update selected count
+  document.getElementById('selected-count').textContent = selectedPOIs.size;
+  
+  // Show/hide delete button
+  const deleteButton = document.getElementById('delete-selected');
+  if (selectedPOIs.size > 0) {
+    deleteButton.style.display = 'block';
+    deleteButton.disabled = false;
+  } else {
+    deleteButton.style.display = 'none';
+    deleteButton.disabled = true;
+  }
+  
+  // Update form hidden inputs
+  const form = document.getElementById('deduplication_form');
+  
+  // Remove existing hidden inputs for selected POIs
+  const existingInputs = form.querySelectorAll('input[name="selected_pois"]');
+  existingInputs.forEach(input => input.remove());
+  
+  // Add new hidden inputs for currently selected POIs
+  selectedPOIs.forEach(poiId => {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'selected_pois';
+    input.value = poiId;
+    form.appendChild(input);
+  });
+  
+  // Update table row highlighting
+  updateTableRowHighlighting();
+}
+
+function updateTableRowHighlighting() {
+  // Update main POI row highlighting
+  const mainPoiRow = document.querySelector('.main-poi-row');
+  if (mainPoiRow && selectedPOIs.has(mainPoiId)) {
+    mainPoiRow.style.backgroundColor = '#fff9c4'; // Light yellow for selected
+  } else if (mainPoiRow) {
+    mainPoiRow.style.backgroundColor = '#f7fafd'; // Original light blue for main POI
+  }
+  
+  // Update duplicate POI rows highlighting
+  const tableRows = document.querySelectorAll('.poi-table-row');
+  tableRows.forEach(row => {
+    const poiId = parseInt(row.dataset.poiId);
+    if (selectedPOIs.has(poiId)) {
+      row.style.backgroundColor = '#fff9c4'; // Light yellow for selected
+    } else {
+      row.style.backgroundColor = '#fff2f2'; // Light red for duplicates
+    }
+  });
+}
+
+function updatePOITable() {
+  // Show all duplicate POI rows
+  const duplicateRows = document.querySelectorAll('.duplicate-poi-row');
+  duplicateRows.forEach(row => {
+    row.style.display = 'table-row';
+  });
+}
+
+// Add after gdalMap is initialized in initializeMaps()
+function updateScaleIndicator() {
+  if (!gdalMap) return;
+  const view = gdalMap.getView();
+  const scaleDiv = document.getElementById('map-scale-indicator');
+  const scaleBar = document.getElementById('scale-bar');
+  const scaleText = document.getElementById('scale-text');
+  if (!scaleDiv || !scaleBar || !scaleText) return;
+
+  const resolution = view.getResolution();
+  if (!resolution) return;
+  
+  // Calculate meters per pixel (approximate, works well for most zoom levels)
+  const projection = view.getProjection();
+  const pointResolution = ol.proj.getPointResolution(projection, resolution, view.getCenter());
+  
+  // Find a nice round number for the scale bar
+  const nominalCount = 100; // Target pixel width for scale bar
+  let nominalDistance = nominalCount * pointResolution;
+  
+  // Round to a nice number
+  let distance, unit;
+  if (nominalDistance >= 1000) {
+    // Use kilometers
+    distance = nominalDistance / 1000;
+    if (distance >= 10) {
+      distance = Math.round(distance);
+    } else if (distance >= 1) {
+      distance = Math.round(distance * 10) / 10;
+    } else {
+      distance = Math.round(distance * 100) / 100;
+    }
+    unit = 'km';
+  } else {
+    // Use meters
+    if (nominalDistance >= 100) {
+      distance = Math.round(nominalDistance / 10) * 10;
+    } else if (nominalDistance >= 10) {
+      distance = Math.round(nominalDistance);
+    } else if (nominalDistance >= 1) {
+      distance = Math.round(nominalDistance * 10) / 10;
+    } else {
+      distance = Math.round(nominalDistance * 100) / 100;
+    }
+    unit = 'm';
+  }
+  
+  // Calculate the actual pixel width needed for this distance
+  const actualDistance = unit === 'km' ? distance * 1000 : distance;
+  const pixelWidth = Math.round(actualDistance / pointResolution);
+  
+  // Update the scale bar
+  scaleBar.style.width = pixelWidth + 'px';
+  scaleText.textContent = distance + ' ' + unit;
+}
+
+// Attach to map move events
+function attachScaleIndicator() {
+  if (!gdalMap) return;
+  gdalMap.on('moveend', updateScaleIndicator);
+  updateScaleIndicator();
+}
+
+// Call after gdalMap is created
+window.onload = function() {
+  initializeMaps();
+  setTimeout(attachScaleIndicator, 500); // Wait for map to render
+};
+
+// Form action handling
+const dedupForm = document.getElementById('deduplication_form');
+const dedupActionInput = document.getElementById('dedup-action');
+const deleteSelectedButton = document.getElementById('delete-selected');
+const markReviewedButton = document.getElementById('mark-reviewed');
+
+deleteSelectedButton.addEventListener('click', function() {
+  if (selectedPOIs.size === 0) {
+    alert('Please select at least one duplicate POI to delete.');
+    return;
+  }
+
+  const confirmed = confirm(`Are you sure you want to delete ${selectedPOIs.size} duplicate POI(s)? This action cannot be undone.`);
+  if (!confirmed) {
+    return;
+  }
+
+  dedupActionInput.value = 'delete';
+  dedupForm.submit();
+});
+
+markReviewedButton.addEventListener('click', function() {
+  const confirmed = confirm('Mark all POIs in this duplicate group as reviewed valid (not duplicates)?');
+  if (!confirmed) {
+    return;
+  }
+
+  dedupActionInput.value = 'mark_reviewed';
+  dedupForm.submit();
+});
+</script>
+
+{% include 'sections/footer.html' %}

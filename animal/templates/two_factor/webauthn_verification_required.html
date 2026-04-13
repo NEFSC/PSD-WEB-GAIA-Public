@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block title %}Security Key Verification Required{% endblock %}
+
+{% block content %}
+<div class="usa-section padding-top-4">
+  <div class="grid-container">
+    <div class="grid-row">
+      <div class="grid-col-12">
+          <div class="usa-alert usa-alert--info" role="alert">
+            <div class="usa-alert__body">
+              <h4 class="usa-alert__heading">Security Key Verification Required</h4>
+              <p class="usa-alert__text">
+                Your account is configured with enhanced security using WebAuthn (passkeys/security keys). <br>
+                Please verify your identity with your security key or passkey to continue.
+              </p>
+            </div>
+          </div>
+        <div class="grid-row grid-gap">
+          <div class="grid-col-8">
+            <p>
+              <strong>Automatic authentication in progress...</strong> Your browser should prompt you to authenticate 
+              with your security key or passkey. Please follow the browser prompts to complete verification.
+            </p>
+
+            <div class="margin-top-3">
+              <button id="webauthn-verify-btn" class="usa-button usa-button--primary usa-button--big" disabled>
+                <span class="usa-spinner usa-spinner--small margin-right-05"></span>
+                Authenticating with Security Key...
+              </button>
+              <p class="margin-top-1 text-base-dark">
+                <small>Your browser should automatically prompt you to authenticate with your security key or passkey.</small>
+              </p>
+            </div>
+
+            <!-- Status messages -->
+            <div id="webauthn-status" class="margin-top-3" style="display: none;">
+              <div id="webauthn-status-alert" class="usa-alert" role="alert">
+                <div class="usa-alert__body">
+                  <p id="webauthn-status-message" class="usa-alert__text"></p>
+                </div>
+              </div>
+            </div>
+
+            
+
+
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- WebAuthn JavaScript -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const verifyButton = document.getElementById('webauthn-verify-btn');
+    const statusDiv = document.getElementById('webauthn-status');
+    const statusAlert = document.getElementById('webauthn-status-alert');
+    const statusMessage = document.getElementById('webauthn-status-message');
+
+    function showStatus(message, type = 'info') {
+        statusAlert.className = `usa-alert usa-alert--${type}`;
+        statusMessage.textContent = message;
+        statusDiv.style.display = 'block';
+    }
+
+    function hideStatus() {
+        statusDiv.style.display = 'none';
+    }
+
+    // Automatically start WebAuthn authentication when page loads
+    async function startWebAuthnVerification() {
+        try {
+            hideStatus();
+            showStatus('Please follow the prompts from your browser to authenticate with your security key or passkey.', 'info');
+
+            // Begin WebAuthn authentication
+            const beginResponse = await fetch('{% url "webauthn_authentication_begin_unified" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            });
+
+            if (!beginResponse.ok) {
+                throw new Error(`Server error: ${beginResponse.status}`);
+            }
+
+            const options = await beginResponse.json();
+            
+            // Convert base64url strings to ArrayBuffers for WebAuthn API
+            options.challenge = base64urlToBuffer(options.challenge);
+            options.allowCredentials = options.allowCredentials.map(cred => ({
+                ...cred,
+                id: base64urlToBuffer(cred.id)
+            }));
+
+            // Call WebAuthn API
+            const credential = await navigator.credentials.get({
+                publicKey: options
+            });
+
+            // Convert response back to base64url for server
+            const authResponse = {
+                credential: {
+                    id: credential.id,
+                    rawId: bufferToBase64url(credential.rawId),
+                    response: {
+                        authenticatorData: bufferToBase64url(credential.response.authenticatorData),
+                        signature: bufferToBase64url(credential.response.signature),
+                        userHandle: credential.response.userHandle ? bufferToBase64url(credential.response.userHandle) : null,
+                        clientDataJSON: bufferToBase64url(credential.response.clientDataJSON)
+                    },
+                    type: credential.type
+                }
+            };
+
+            // Send authentication response to server for verification
+            const verifyResponse = await fetch('{% url "webauthn_verification_complete" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify(authResponse)
+            });
+
+            const result = await verifyResponse.json();
+
+            if (result.status === 'success') {
+                showStatus('Security key verification successful! Redirecting...', 'success');
+                verifyButton.innerHTML = '<svg class="usa-icon margin-right-05" aria-hidden="true" focusable="false" role="img"><use xlink:href="#svg-check"></use></svg>Verification Complete';
+                verifyButton.className = 'usa-button usa-button--success usa-button--big';
+                setTimeout(() => {
+                    window.location.href = result.redirect_url || '{{ request.GET.next|default:"/" }}';
+                }, 1500);
+            } else {
+                throw new Error(result.error || 'Verification failed');
+            }
+
+        } catch (error) {
+            console.error('WebAuthn error:', error);
+            let errorMessage = 'Authentication failed. ';
+            
+            if (error.name === 'NotAllowedError') {
+                errorMessage += 'Authentication was cancelled or timed out.';
+            } else if (error.name === 'SecurityError') {
+                errorMessage += 'Security error occurred.';
+            } else if (error.name === 'NotSupportedError') {
+                errorMessage += 'WebAuthn is not supported by your browser.';
+            } else {
+                errorMessage += error.message || 'Please try again.';
+            }
+            
+            showStatus(errorMessage, 'error');
+            
+            // Re-enable manual retry
+            verifyButton.disabled = false;
+            verifyButton.innerHTML = '<svg class="usa-icon margin-right-05" aria-hidden="true" focusable="false" role="img"><use xlink:href="#svg-key"></use></svg>Retry Security Key Verification';
+            verifyButton.className = 'usa-button usa-button--primary usa-button--big';
+            verifyButton.onclick = startWebAuthnVerification;
+        }
+    }
+
+    // WebAuthn utility functions
+    function base64urlToBuffer(base64url) {
+        const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+        const padded = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, '=');
+        return Uint8Array.from(atob(padded), c => c.charCodeAt(0));
+    }
+
+    function bufferToBase64url(buffer) {
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+        return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    }
+
+    // Start WebAuthn verification automatically when page loads
+    startWebAuthnVerification();
+});
+</script>
+
+<!-- Add CSRF token for JavaScript -->
+<form style="display: none;">
+  {% csrf_token %}
+</form>
+{% endblock %}

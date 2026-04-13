@@ -1,0 +1,99 @@
+{% load static %}
+{% include 'sections/header.html' %}
+<section class="grid-container usa-section  padding-top-0 width-full">
+    <div class="grid-row flex-justify-center">
+        <div class="grid-col-12 tablet:grid-col-10 desktop:grid-col-12">
+            <h1 class="margin-bottom-0">Validate Annotations</h1>
+            {% if project %}
+                <p class="site-subheading margin-top-1" style="white-space: nowrap;">{{ project.label }}</p>
+            {% endif %}
+            <div class="usa-toggle-container">
+                <input class="usa-toggle" id="toggle-final-reviews" type="checkbox" {% if request.GET.showfinals == 'true' %}checked{% endif %} name="toggle-final-reviews" onchange="if(this.checked) window.location.href='?sort={% if request.GET.sort == "desc" %}asc{% else %}desc{% endif %}&showfinals=true'; else window.location.href='?sort={% if request.GET.sort == "desc" %}asc{% else %}desc{% endif %}&showfinals=false';">
+                <label class="usa-toggle__label" for="toggle-final-reviews">
+                    <span>Show Records with Final Reviews</span>
+                </label>
+            </div>
+            {% if not page_obj %}
+            <div class="usa-alert usa-alert--info" role="alert">
+              <div class="usa-alert__body">
+                <p class="usa-alert__text">
+                    You're all caught up!
+                </p>
+              </div>
+            </div>
+            {% else %}
+            <table class="usa-table usa-table--bordered usa-table--striped">
+                <thead>
+                    <tr>
+                        <th scope="col">
+                            <button type="button" class="usa-button usa-button--unstyled" onclick="window.location.href='?sort={% if request.GET.sort == "desc" %}asc{% else %}desc{% endif %}{% if request.GET.showfinals == "true" %}&showfinals=true{% endif %}'">
+                                ID
+                                {% if request.GET.sort == 'desc' %}
+                                    <svg class="usa-icon" aria-hidden="true" focusable="false" role="img"><use xlink:href="/static/uswds/img/sprite.svg#arrow_downward"></use></svg>
+                                {% else %}
+                                    <svg class="usa-icon" aria-hidden="true" focusable="false" role="img"><use xlink:href="/static/uswds/img/sprite.svg#arrow_upward"></use></svg>
+                                {% endif %}
+                            </button>
+                        </th></th>
+                        <th scope="col">User 1</th>
+                        <th scope="col">User 2</th>
+                        <th scope="col">User 3</th>
+                        <th scope="col">Final Review</th>
+                        <th scope="col">Final Comments</th>
+                        <th scope="col">Final Review Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for poi in page_obj %}
+                        <tr>
+                            <td><a href="/project/{{ poi.project_id }}/annotation/{{ poi.id }}">{{ poi.id }}</a></td>
+                            <td>{% if poi.three_reviews.0 %}{% if poi.three_reviews.0.target %}{{ poi.three_reviews.0.target }}{% else %}{{ poi.three_reviews.0.classification }}{% endif %}{% if poi.three_reviews.0.confidence %}: {{ poi.three_reviews.0.confidence }}{% endif %}{% endif %}</td>
+                            <td>{% if poi.three_reviews.1 %}{% if poi.three_reviews.1.target %}{{ poi.three_reviews.1.target }}{% else %}{{ poi.three_reviews.1.classification }}{% endif %}{% if poi.three_reviews.1.confidence %}: {{ poi.three_reviews.1.confidence }}{% endif %}{% endif %}</td>
+                            <td>{% if poi.three_reviews.2 %}{% if poi.three_reviews.2.target %}{{ poi.three_reviews.2.target }}{% else %}{{ poi.three_reviews.2.classification }}{% endif %}{% if poi.three_reviews.2.confidence %}: {{ poi.three_reviews.2.confidence }}{% endif %}{% endif %}</td>
+                            <td>{% if poi.final_classification %}{{ poi.final_classification }}{% endif %}{% if poi.final_species %}: {{ poi.final_species }}{% endif %}{% if poi.final_confidence %}: {{ poi.final_confidence }}{% endif %}</td>
+                            <td>{% if poi.final_comments %}{{ poi.final_comments }}{% endif %}</td>
+                            <td>{% if poi.final_review_date %}{{ poi.final_review_date }}{% endif %}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <nav aria-label="Pagination" class="usa-pagination">
+            <ul class="usa-pagination__list">
+            {% if page_obj.has_previous %}
+                <li class="usa-pagination__item usa-pagination__arrow">
+                <a class="usa-pagination__link" href="?page=1">
+                    <span class="usa-pagination__link-text">First</span>
+                </a>
+                </li>
+                <li class="usa-pagination__item usa-pagination__arrow">
+                <a class="usa-pagination__link" href="?page={{ page_obj.previous_page_number }}">
+                    <span class="usa-pagination__link-text">Previous</span>
+                </a>
+                </li>
+            {% endif %}
+
+            <li class="usa-pagination__item usa-pagination__page-no">
+                <span class="usa-pagination__link-text">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+            </li>
+
+            {% if page_obj.has_next %}
+                <li class="usa-pagination__item usa-pagination__arrow">
+                <a class="usa-pagination__link" href="?page={{ page_obj.next_page_number }}">
+                    <span class="usa-pagination__link-text">Next</span>
+                </a>
+                </li>
+                <li class="usa-pagination__item usa-pagination__arrow">
+                <a class="usa-pagination__link" href="?page={{ page_obj.paginator.num_pages }}">
+                    <span class="usa-pagination__link-text">Last</span>
+                </a>
+                </li>
+            {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</section>
+</body>
+{% include 'sections/footer.html' %}
+</html>

@@ -1,0 +1,223 @@
+{% extends "two_factor/_base.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="grid-container">
+    <div class="grid-row grid-gap">
+        <div class="grid-col-12">
+            <nav class="usa-breadcrumb" aria-label="Breadcrumbs">
+                <ol class="usa-breadcrumb__list">
+                    <li class="usa-breadcrumb__list-item">
+                        <a href="{% url 'account_page' %}" class="usa-breadcrumb__link">{% trans "Account" %}</a>
+                    </li>
+                    <li class="usa-breadcrumb__list-item usa-current" aria-current="page">
+                        <span>{% trans "Two-Factor Authentication" %}</span>
+                    </li>
+                </ol>
+            </nav>
+
+            <div class="usa-prose padding-bottom-2">
+                <h1>{% trans "Two-Factor Authentication Settings" %}</h1>
+            </div>
+
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="usa-alert usa-alert--{{ message.tags|default:'info' }}">
+                        <div class="usa-alert__body">
+                            <p class="usa-alert__text">{{ message }}</p>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <!-- Two-Factor Status Overview -->
+            <div class="usa-card margin-bottom-3">
+                <div class="usa-card__container">
+                    <div class="usa-card__header">
+                        <h2 class="usa-card__heading">{% trans "Security Status" %}</h2>
+                    </div>
+                    <div class="usa-card__body">
+                        {% if has_2fa %}
+                            <div class="usa-alert usa-alert--success usa-alert--no-icon">
+                                <div class="usa-alert__body">
+                                    <p class="usa-alert__text">
+                                        <strong>{% trans "Two-factor authentication is enabled." %}</strong>
+                                        {% trans "Your account is protected with additional security." %}
+                                    </p>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="usa-alert usa-alert--warning usa-alert--no-icon">
+                                <div class="usa-alert__body">
+                                    <p class="usa-alert__text">
+                                        <strong>{% trans "Two-factor authentication is not enabled." %}</strong>
+                                        {% trans "Set up 2FA to improve your account security." %}
+                                    </p>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- TOTP Authenticators Section -->
+            {% if otp_available %}
+            <div class="usa-card margin-bottom-3">
+                <div class="usa-card__container">
+                    <div class="usa-card__header">
+                        <h2 class="usa-card__heading">{% trans "Authenticator Apps" %}</h2>
+                    </div>
+                    <div class="usa-card__body">
+                        <p>{% trans "Use apps like Google Authenticator, Authy, or 1Password to generate time-based codes." %}</p>
+                        
+                        {% if totp_devices %}
+                            <div class="usa-table-container--scrollable">
+                                <table class="usa-table usa-table--striped">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">{% trans "Device Name" %}</th>
+                                            <th scope="col">{% trans "Added" %}</th>
+                                            <th scope="col">{% trans "Last Used" %}</th>
+                                            <th scope="col">{% trans "Actions" %}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for device in totp_devices %}
+                                            <tr>
+                                                <td>{{ device.name|default:"TOTP Device" }}</td>
+                                                <td>{{ device.created_at|date:"M j, Y" }}</td>
+                                                <td>
+                                                    {% if device.last_used %}
+                                                        {{ device.last_used|date:"M j, Y" }}
+                                                    {% else %}
+                                                        {% trans "Never" %}
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    <form method="post" action="{% url 'remove_totp_device' device.id %}" class="display-inline">
+                                                        {% csrf_token %}
+                                                        <button type="submit" 
+                                                                class="usa-button usa-button--secondary usa-button--outline"
+                                                                onclick="return confirm(&quot;{% trans 'Are you sure you want to remove this authenticator?' %}&quot;)">
+                                                            {% trans "Remove" %}
+                                                        </button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <p class="text-base-dark">{% trans "No authenticator apps configured." %}</p>
+                        {% endif %}
+                        
+                        <div class="margin-top-3">
+                            <a href="{% url 'two_factor:setup' %}" class="usa-button">
+                                {% if totp_devices %}
+                                    {% trans "Add Another Authenticator" %}
+                                {% else %}
+                                    {% trans "Set Up Authenticator App" %}
+                                {% endif %}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- WebAuthn/Passkeys Section -->
+            {% if webauthn_available %}
+            <div class="usa-card margin-bottom-3">
+                <div class="usa-card__container">
+                    <div class="usa-card__header">
+                        <h2 class="usa-card__heading">{% trans "Security Keys & Passkeys" %}</h2>
+                    </div>
+                    <div class="usa-card__body">
+                        <p>{% trans "Use hardware security keys (like YubiKey) or device passkeys for faster, more secure authentication." %}</p>
+                        
+                        {% if webauthn_credentials %}
+                            <div class="usa-table-container--scrollable">
+                                <table class="usa-table usa-table--striped">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">{% trans "Name" %}</th>
+                                            <th scope="col">{% trans "Added" %}</th>
+                                            <th scope="col">{% trans "Last Used" %}</th>
+                                            <th scope="col">{% trans "Actions" %}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for credential in webauthn_credentials %}
+                                            <tr>
+                                                <td>{{ credential.name }}</td>
+                                                <td>{{ credential.created_at|date:"M j, Y" }}</td>
+                                                <td>
+                                                    {% if credential.last_used %}
+                                                        {{ credential.last_used|date:"M j, Y" }}
+                                                    {% else %}
+                                                        {% trans "Never" %}
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    <a href="{% url 'remove_webauthn' credential.id %}" 
+                                                       class="usa-button usa-button--secondary usa-button--outline"
+                                                       onclick="return confirm('{% trans "Are you sure you want to remove this passkey?" %}')">
+                                                        {% trans "Remove" %}
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <p class="text-base-dark">{% trans "No security keys or passkeys configured." %}</p>
+                        {% endif %}
+                        
+                        <div class="margin-top-3">
+                            <a href="{% url 'webauthn_setup_unified' %}" class="usa-button">
+                                {% if webauthn_credentials %}
+                                    {% trans "Add Another Security Key" %}
+                                {% else %}
+                                    {% trans "Set Up Security Key" %}
+                                {% endif %}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Backup tokens removed from product - UI section intentionally omitted -->
+
+            <!-- Danger Zone -->
+            <!-- {% if has_2fa %}
+            <div class="usa-card">
+                <div class="usa-card__container">
+                    <div class="usa-card__header">
+                        <h2 class="usa-card__heading text-emergency">{% trans "Disable All 2FA" %}</h2>
+                    </div>
+                    <div class="usa-card__body">
+                        <div class="usa-alert usa-alert--error usa-alert--no-icon margin-bottom-2">
+                            <div class="usa-alert__body">
+                                <p class="usa-alert__text">
+                                    <strong>{% trans "Warning:" %}</strong>
+                                    {% trans "This will remove all two-factor authentication from your account and make it less secure." %}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="margin-top-3">
+                            <a href="{% url 'disable_all_2fa_unified' %}" 
+                            class="usa-button usa-button--secondary">
+                                {% trans "Disable All Two-Factor Authentication" %}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %} -->
+        </div>
+    </div>
+</div>
+{% endblock %}

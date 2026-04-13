@@ -1,0 +1,77 @@
+# ==============================================================================
+# GAIA Soft-Link Registry
+# ==============================================================================
+#
+# This file declares soft links between tables that are NOT enforced by
+# database FK constraints. db_repair.py reads this registry for:
+#   - orphan detection along soft-link edges
+#   - compare operations with custom matchers
+#   - backfill operations across tables
+#
+# RULES:
+#   - Only named matchers implemented in db_matchers.py are allowed
+#   - YAML describes WHAT to link, Python code describes HOW to match
+#   - Cardinality MUST be quoted (YAML parses 1:1 as sexagesimal = 61)
+#
+# MATCHERS (implemented in animal/utils/db_matchers.py):
+#   - exact: String equality
+#   - prefix: Either value is prefix of other
+#   - vendor_id_ignore_typecode_v1: Positions 0-12 + 19+ (ignores type code)
+#
+# ==============================================================================
+
+soft_links:
+
+  # ---------------------------------------------------------------------------
+  # POI -> ETL (catalog_id)
+  # ---------------------------------------------------------------------------
+  # POI.catalog_id references ETL.id but no FK constraint exists.
+  # Per GAIFAGP-469: Intentional soft link to support POIs from non-ETL sources.
+  # Audit baseline (April 7, 2026): 100.0% match rate.
+
+  - name: poi_to_etl_catalog
+    left: animal_pointsofinterest.catalog_id
+    right: etl.id
+    matcher: exact
+    cardinality: "M:1"  # Quoted to prevent YAML sexagesimal parsing
+    notes: |
+      POI.catalog_id references ETL.id but no FK constraint exists.
+      Decision: GAIFAGP-469 - intentional soft link + annual audit.
+      Baseline: 100.0% (133,695 / 133,695) as of April 7, 2026.
+      Previous: 89.3% (119,334 / 133,697) as of Feb 4, 2026.
+
+  # ---------------------------------------------------------------------------
+  # POI -> EarthExplorer (vendor_id with type code mismatch)
+  # ---------------------------------------------------------------------------
+  # POI vendor_id uses S1BS type code, EE uses M1BS/P1BS.
+  # Match ignores type code (positions 14-18).
+  # Per GAIFAGP-467, GAIFAGP-468: Source for entity_id and sensor backfill.
+  
+  - name: poi_to_ee_vendor
+    left: animal_pointsofinterest.vendor_id
+    right: animal_earthexplorer.vendor_id
+    matcher: vendor_id_ignore_typecode_v1
+    cardinality: "M:1"  # Quoted to prevent YAML sexagesimal parsing
+    notes: |
+      POI uses S1BS type code, EE uses M1BS/P1BS for same scene.
+      Match on timestamp (positions 0-12) + catalog (positions 19+).
+      Coverage: 47.0% (62,801 / 133,695) as of April 7, 2026.
+      70,894 POIs across 10 vendor_ids have no EE record — all March 2021
+      imagery loaded before EE search results were ingested.
+      Previous: 36.2% (48,440 / 133,697) as of Feb 4, 2026.
+
+  # ---------------------------------------------------------------------------
+  # ETL -> EarthExplorer (vendor_id exact)
+  # ---------------------------------------------------------------------------
+  # ETL.vendor_id should match EE.vendor_id exactly.
+  # Note: April 7, 2026 audit showed 100.0% match — EE backfill resolved all.
+
+  - name: etl_to_ee_vendor
+    left: etl.vendor_id
+    right: animal_earthexplorer.vendor_id
+    matcher: exact
+    cardinality: "1:1"  # Quoted to prevent YAML sexagesimal parsing
+    notes: |
+      ETL records now fully covered by EE search results.
+      Baseline: 100.0% (1,444 / 1,444) as of April 7, 2026.
+      Previous: 0.0% as of Feb 4, 2026 (EE backfill resolved all).

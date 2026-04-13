@@ -1,0 +1,10 @@
+[
+  { "model": "animal.annotations", "fields": { "poi": 2, "user_id": 2, "classification": 14, "comments": "this is a comment", "confidence": 2, "target": 1 } },
+  { "model": "animal.annotations", "fields": { "poi": 2, "user_id": 3, "classification": 2, "comments": "this is a comment 2" } },
+  { "model": "animal.annotations", "fields": { "poi": 2, "user_id": 1, "classification": 14, "comments": "this is a comment 3", "confidence": 2, "target": 1 } },
+  { "model": "animal.annotations", "fields": { "poi": 3, "user_id": 2, "classification": 14, "comments": "this is a comment", "confidence": 2, "target": 1 } },
+  { "model": "animal.annotations", "fields": { "poi": 3, "user_id": 3, "classification": 2, "comments": "this is a comment 2" } },
+  { "model": "animal.annotations", "fields": { "poi": 3, "user_id": 1, "classification": 14, "comments": "this is a comment 3", "confidence": 2, "target": 1 } },
+  
+  { "model": "animal.PointsOfInterest", "fields": { "catalog_id": "1040010093847B00", "vendor_id": "24MAR01151632-P1BS-508221188010_01_P004", "entity_id": "WV320240301151632P00", "sample_idx": "3394", "area": 1665.40089557602, "deviation": 12.3084850311279, "cog_url":"google.com", "point":"POINT(38.897957 -77.036560)" } }
+]

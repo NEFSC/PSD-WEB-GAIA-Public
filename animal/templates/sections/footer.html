@@ -1,0 +1,89 @@
+{% load static %}
+<footer class="usa-footer usa-footer--slim margin-top-auto">
+  <div class="usa-footer__primary-section">
+    <div class="usa-footer__primary-container grid-row">
+      <div class="mobile-lg:grid-col-12">
+        <nav class="usa-footer__nav" aria-label="Footer navigation,">
+          <ul class="grid-row grid-gap">
+            <li class="mobile-lg:grid-col-6 desktop:grid-col-auto usa-footer__primary-content">
+                <a class="usa-footer__primary-link"
+                  style="text-decoration: none;"
+                 title="Accessibility"
+                 target="_blank"
+                 href="http://www.noaa.gov/accessibility">Accessibility</a>
+            </li>
+            <li class="mobile-lg:grid-col-6 desktop:grid-col-auto usa-footer__primary-content">
+              <a class="usa-footer__primary-link"
+                style="text-decoration: none;"
+                 title="EEO"
+                 target="_blank"
+                 href="https://www.fisheries.noaa.gov/about/office-equal-employment-opportunity">EEO</a>
+            </li>
+            <li class="mobile-lg:grid-col-6 desktop:grid-col-auto usa-footer__primary-content">
+              <a class="usa-footer__primary-link"
+                style="text-decoration: none;"
+                 title="FOIA"
+                 target="_blank"
+                 href="https://www.noaa.gov/foia">FOIA</a>
+            </li>
+            <li class="mobile-lg:grid-col-6 desktop:grid-col-auto usa-footer__primary-content">
+              <a class="usa-footer__primary-link"
+                style="text-decoration: none;"
+                 title="Quality"
+                 target="_blank"
+                 href="https://www.noaa.gov/information-quality">Quality</a>
+            </li>
+            <li class="mobile-lg:grid-col-6 desktop:grid-col-auto usa-footer__primary-content">
+              <a class="usa-footer__primary-link"
+                style="text-decoration: none;"
+                 title="Policies Disclaimer"
+                 target="_blank"
+                 href="https://www.fisheries.noaa.gov/website-policies-and-disclaimers">Policies Disclaimer</a>
+            </li>
+            <li class="mobile-lg:grid-col-6 desktop:grid-col-auto usa-footer__primary-content">
+              <a class="usa-footer__primary-link"
+                style="text-decoration: none;"
+                 title="Privacy Policy"
+                 target="_blank"
+                 href="https://www.fisheries.noaa.gov/privacy-policy">Privacy Policy</a>
+            </li>
+            <li class="mobile-lg:grid-col-6 desktop:grid-col-auto usa-footer__primary-content">
+              <a class="usa-footer__primary-link"
+                style="text-decoration: none;"
+                 title="Helpdesk"
+                 target="_blank"
+                 target="_blank"
+                 href="https://apps-st.fisheries.noaa.gov/jira/servicedesk/customer/portal/3">Service Desk</a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <div class="usa-footer__secondary-section">
+    <div class="grid-container">
+      <div class="usa-footer__logo grid-row grid-gap-2">
+        <div class="grid-col-auto">
+          <a href="https://www.fisheries.noaa.gov/about/northeast-fisheries-science-center"
+             title="NOAA 150th Celebration Logo"
+             aria-label="NOAA 150th Celebration Logo"
+             target="_blank"
+             target="_blank">
+            <img class="usa-footer__logo-img"
+                 src="{% static 'uswds/img/150fishlogo.png' %}"
+                 alt="NOAA 150th Celebration Logo" />
+          </a>
+        </div>
+        <div class="grid-col-auto">
+          <p class="usa-footer__logo-heading">Science. Service. Stewardship.</p>
+        </div>
+      </div>
+      <div style="padding-top:5px;color:gray;font-size:small;">
+        <a class="text-no-underline"
+           href="https://github.com/NEFSC/PSD-WEB-GAIA-Public"
+           target="_blank">v0.2.4 | {{ BUILD_DATE }}</a>
+      </div>
+    </div>
+  </div>
+</footer>
+</html>

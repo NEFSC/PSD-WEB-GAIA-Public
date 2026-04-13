@@ -1,0 +1,251 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="{% static 'uswds/uswds.css' %}" />
+    <script src="{% static 'uswds/uswds-init.js' %}"></script>
+    <title>{% block title %}GAIA{% endblock %}{% if DJANGO_ENV != "production" %} - {{ DJANGO_ENV }}{% endif %}</title>
+    <link rel="stylesheet"
+          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin="" />
+    <link rel="icon"
+          type="image/png"
+          sizes="32x32"
+          href="{% static 'favicon/favicon-32x32.png' %}">
+    <link rel="icon"
+          type="image/png"
+          sizes="16x16"
+          href="{% static 'favicon/favicon-16x16.png' %}">
+    <link rel="manifest" href="{% static 'favicon/site.webmanifest' %}">
+    {% block extra_head %}{% endblock %}
+  </head>
+  <body style="min-height: 100vh; display: flex; flex-direction: column;">
+    <script src="{% static 'uswds/uswds.min.js' %}"></script>
+    <a class="usa-skipnav" href="#main-content">Skip to main content</a>
+    <section class="usa-banner" aria-label="Official government website">
+      <div class="usa-accordion">
+        <header class="usa-banner__header">
+          <div class="usa-banner__inner">
+            <div class="grid-col-auto">
+              <img class="usa-banner__header-flag"
+                   src="{% static 'uswds/img/us_flag_small.png' %}"
+                   alt="U.S. flag" />
+            </div>
+            <div class="grid-col-fill tablet:grid-col-auto">
+              <p class="usa-banner__header-text">An official website of the United States government</p>
+              <p class="usa-banner__header-action" aria-hidden="true">Here’s how you know</p>
+            </div>
+            <button class="usa-accordion__button usa-banner__button"
+                    aria-expanded="false"
+                    aria-controls="gov-banner">
+              <span class="usa-banner__button-text">Here’s how you know</span>
+            </button>
+          </div>
+        </header>
+        <div class="usa-banner__content usa-accordion__content" id="gov-banner">
+          <div class="grid-row grid-gap-lg">
+            <div class="usa-banner__guidance tablet:grid-col-6">
+              <img class="usa-banner__icon usa-media-block__img"
+                   src="{% static 'uswds/img/icon-dot-gov.svg' %}"
+                   role="img"
+                   alt=""
+                   aria-hidden="true" />
+              <div class="usa-media-block__body">
+                <p>
+                  <strong>Official websites use .gov</strong>
+                  <br />
+                  A <strong>.gov</strong> website belongs to an official
+                  government organization in the United States.
+                </p>
+              </div>
+            </div>
+            <div class="usa-banner__guidance tablet:grid-col-6">
+              <img class="usa-banner__icon usa-media-block__img"
+                   src="{% static 'uswds/img/icon-https' %}.svg"
+                   role="img"
+                   alt=""
+                   aria-hidden="true" />
+              <div class="usa-media-block__body">
+                <p>
+                  <strong>Secure .gov websites use HTTPS</strong>
+                  <br />
+                  A <strong>lock</strong> (
+                  <span class="icon-lock">
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         width="52"
+                         height="64"
+                         viewBox="0 0 52 64"
+                         class="usa-banner__lock-image"
+                         role="img"
+                         aria-labelledby="banner-lock-title banner-lock-description"
+                         focusable="false">
+                      <title id="banner-lock-title">Lock</title>
+                      <desc id="banner-lock-description">A locked padlock</desc>
+                      <path fill="#000000" fill-rule="evenodd" d="M26 0c10.493 0 19 8.507 19 19v9h3a4 4 0 0 1 4 4v28a4 4 0 0 1-4 4H4a4 4 0 0 1-4-4V32a4 4 0 0 1 4-4h3v-9C7 8.507 15.507 0 26 0zm0 8c-5.979 0-10.843 4.77-10.996 10.712L15 19v9h22v-9c0-6.075-4.925-11-11-11z" />
+                    </svg>
+                  </span>
+                  ) or <strong>https://</strong> means you’ve safely connected
+                  to the .gov website. Share sensitive information only on
+                  official, secure websites.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <div class="usa-overlay"></div>
+    <header class="usa-header usa-header--basic">
+      <div class="usa-nav-container">
+        <div class="usa-navbar">
+          <div class="usa-logo" id="basic-logo">
+            <em class="usa-logo__text">
+              <a href="{% url 'landing_page' %}" title="GAIA">GAIA</a>
+            </em>
+          </div>
+          <button class="usa-menu-btn">Menu</button>
+        </div>
+        <nav aria-label="Primary navigation" class="usa-nav">
+          <button class="usa-nav__close">
+            <img src="" role="img" alt="Close" />
+          </button>
+          <ul class="usa-nav__primary usa-accordion">
+            <li class="usa-nav__primary-item">
+                {% if user.is_authenticated %}
+                <form id="logout-form"
+                    action="{% url 'logout' %}"
+                    method="POST"
+                    style="display: inline">
+                  {% csrf_token %}
+                  <button href="" class="usa-nav-link">
+                  <span>Logout</span>
+                  </button>
+                </form>
+              {% endif %}
+            </li>
+          </ul>
+          <div class="buttons">
+            {% if user.is_authenticated %}
+              <a href="{% url 'account_page' %}" class="usa-button--unstyled" title="Account Settings">
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     width="32"
+                     height="32"
+                     viewBox="0 0 50 50"
+                     class="logo">
+                  <title>User Account</title>
+                  <path fill="#1b1b1b" d="M22.766,0.001C10.194,0.001,0,10.193,0, 22.766s10.193,22.765,22.766,22.765c12.574,0,22.766-10.192,22.766-22.765 S35.34,0.001,22.766,0.001z M22.766,6.808c4.16,0,7.531,3.372,7.531,7.53c0,4.159-3.371,7.53-7.531,7.53 c-4.158,0-7.529-3.371-7.529-7.53C15.237,10.18,18.608,6.808,22.766, 6.808z M22.761,39.579c-4.149,0-7.949-1.511-10.88-4.012 c-0.714-0.609-1.126-1.502-1.126-2.439c0-4.217,3.413-7.592,7.631-7.592h8.762c4.219,0,7.619,3.375,7.619,7.592 c0,0.938-0.41,1.829-1.125,2.438C30.712,38.068,26.911,39.579,22.761,39.579z" />
+                </svg>
+              </a>
+            {% endif %}
+          </div>
+        </nav>
+      </div>
+    </header>
+    
+    <script>
+      // Set user authentication status for JavaScript
+      document.body.dataset.userAuthenticated = '{{ user.is_authenticated|yesno:"true,false" }}';
+      
+      // Global utility for persisting brightness, contrast, and saturation settings
+      window.ImageAdjustmentPersistence = {
+        // Default values
+        defaults: {
+          exposure: 0,
+          contrast: 0,
+          saturation: 0
+        },
+        
+        // Save settings to localStorage
+        saveSettings: function(exposure, contrast, saturation) {
+          localStorage.setItem('gaia_image_exposure', exposure.toString());
+          localStorage.setItem('gaia_image_contrast', contrast.toString());
+          localStorage.setItem('gaia_image_saturation', saturation.toString());
+        },
+        
+        // Load settings from localStorage with fallback to defaults
+        loadSettings: function() {
+          return {
+            exposure: parseFloat(localStorage.getItem('gaia_image_exposure')) || this.defaults.exposure,
+            contrast: parseFloat(localStorage.getItem('gaia_image_contrast')) || this.defaults.contrast,
+            saturation: parseFloat(localStorage.getItem('gaia_image_saturation')) || this.defaults.saturation
+          };
+        },
+        
+        // Initialize controls with saved values
+        initializeControls: function(variables, cogLayer) {
+          const settings = this.loadSettings();
+          
+          // Update variables object
+          variables.exposure = settings.exposure;
+          variables.contrast = settings.contrast;
+          variables.saturation = settings.saturation;
+          
+          // Update UI controls
+          const exposureControl = document.getElementById('exposure');
+          const contrastControl = document.getElementById('contrast');
+          const saturationControl = document.getElementById('saturation');
+          
+          if (exposureControl) {
+            exposureControl.value = settings.exposure.toString();
+            // Update any text display if it exists
+            const exposureText = document.getElementById('exposure-text');
+            if (exposureText) exposureText.innerText = settings.exposure.toFixed(2);
+          }
+          
+          if (contrastControl) {
+            contrastControl.value = settings.contrast.toString();
+            const contrastText = document.getElementById('contrast-text');
+            if (contrastText) contrastText.innerText = settings.contrast.toFixed(2);
+          }
+          
+          if (saturationControl) {
+            saturationControl.value = settings.saturation.toString();
+            const saturationText = document.getElementById('saturation-text');
+            if (saturationText) saturationText.innerText = settings.saturation.toFixed(2);
+          }
+          
+          // Update layer if provided
+          if (cogLayer && cogLayer.updateStyleVariables) {
+            cogLayer.updateStyleVariables(settings);
+          }
+          
+          return settings;
+        },
+        
+        // Setup event listeners that save settings when changed
+        setupEventListeners: function(cogLayer) {
+          const self = this;
+          
+          ['exposure', 'contrast', 'saturation'].forEach(function(name) {
+            const element = document.getElementById(name);
+            if (element) {
+              element.addEventListener('input', function(event) {
+                const value = parseFloat(event.target.value);
+                
+                // Update text display if it exists
+                const textElement = document.getElementById(name + '-text');
+                if (textElement) {
+                  textElement.innerText = value.toFixed(2);
+                }
+                
+                // Update layer
+                if (cogLayer && cogLayer.updateStyleVariables) {
+                  const updates = {};
+                  updates[name] = value;
+                  cogLayer.updateStyleVariables(updates);
+                }
+                
+                // Save to localStorage
+                const currentSettings = self.loadSettings();
+                currentSettings[name] = value;
+                self.saveSettings(currentSettings.exposure, currentSettings.contrast, currentSettings.saturation);
+              });
+            }
+          });
+        }
+      };
+    </script>

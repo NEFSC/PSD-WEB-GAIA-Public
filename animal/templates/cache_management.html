@@ -1,0 +1,53 @@
+{% load static %}
+{% include 'sections/header.html' %}
+
+<div class="grid-container usa-section">
+    <div class="grid-row">
+        <div class="grid-col-12">
+            <h1>Cache Management</h1>
+            {% if project %}
+                <h2>{{ project.label }}</h2>
+                
+                {% if cache_enabled %}
+                    <p>Clear cached project page data to force fresh data loading on next page visit.</p>
+                    
+                    <div class="usa-alert usa-alert--warning" role="alert">
+                        <div class="usa-alert__body">
+                            <h3 class="usa-alert__heading">Warning</h3>
+                            <p class="usa-alert__text">
+                                This will clear the 4-hour cache for project page data. 
+                                The next page load will be slower as data is recalculated from the database.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <form method="post" class="margin-top-3">
+                        {% csrf_token %}
+                        <button type="submit" class="usa-button usa-button--secondary">
+                            Clear Project Page Cache
+                        </button>
+                        <a href="/project/{{ project_id }}/" class="usa-button usa-button--outline">
+                            Cancel
+                        </a>
+                    </form>
+                {% else %}
+                    <div class="usa-alert usa-alert--info" role="alert">
+                        <div class="usa-alert__body">
+                            <h3 class="usa-alert__heading">Cache Disabled</h3>
+                            <p class="usa-alert__text">
+                                Project page caching is currently disabled in the application settings.
+                                No cache operations are needed.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <a href="/project/{{ project_id }}/" class="usa-button usa-button--outline margin-top-3">
+                        Back to Project
+                    </a>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% include 'sections/footer.html' %}

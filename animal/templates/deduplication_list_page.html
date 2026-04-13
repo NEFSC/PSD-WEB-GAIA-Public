@@ -1,0 +1,109 @@
+{% load static %}
+{% include 'sections/header.html' %}
+<section class="grid-container usa-section  padding-top-0 width-full">
+    <div class="grid-row flex-justify-center">
+        <div class="grid-col-12 tablet:grid-col-10 desktop:grid-col-12">
+            <h1 class="margin-bottom-0">Review Duplicates</h1>
+            {% if project %}
+                <p class="site-subheading margin-top-1" style="white-space: nowrap;">{{ project.label }}</p>
+            {% endif %}
+            <p>This page shows Points of Interest (POIs) with animal classifications that are within 100 meters of each other.</p>
+            {% if page_obj %}
+            <div class="usa-alert usa-alert--info" role="alert">
+              <div class="usa-alert__body">
+                <p class="usa-alert__text">
+                    Found {{ page_obj.paginator.count }} duplicate group{{ page_obj.paginator.count|pluralize }} containing POIs within 100 meters of each other.
+                </p>
+              </div>
+            </div>
+            {% endif %}
+            {% if not page_obj %}
+            <div class="usa-alert usa-alert--info" role="alert">
+              <div class="usa-alert__body">
+                <p class="usa-alert__text">
+                    No duplicate POIs found within 100 meters of each other.
+                </p>
+              </div>
+            </div>
+            {% else %}
+            <table class="usa-table usa-table--bordered usa-table--striped">
+                <thead>
+                    <tr>
+                        <th scope="col">
+                            <a href="?sort={% if request.GET.sort == 'desc' %}asc{% else %}desc{% endif %}" class="usa-button usa-button--unstyled">
+                                Main POI ID
+                                {% if request.GET.sort == 'desc' %}
+                                    <svg class="usa-icon" aria-hidden="true" focusable="false" role="img"><use xlink:href="/static/uswds/img/sprite.svg#arrow_downward"></use></svg>
+                                {% else %}
+                                    <svg class="usa-icon" aria-hidden="true" focusable="false" role="img"><use xlink:href="/static/uswds/img/sprite.svg#arrow_upward"></use></svg>
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th scope="col">Nearby POIs (within 100m)</th>
+                        <th scope="col">Distance (approx)</th>
+                        <th scope="col">Main POI Classification</th>
+                        <th scope="col">Final Review Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for duplicate_group in page_obj %}
+                        <tr>
+                            <td><a href="/project/{{ project.id }}/deduplication/{{ duplicate_group.main_poi.id }}/">{{ duplicate_group.main_poi.id }}</a></td>
+                            <td>
+                                {% for nearby_item in duplicate_group.nearby_pois %}
+                                    <a href="/project/{{ project.id }}/deduplication/{{ nearby_item.poi.id }}/">{{ nearby_item.poi.id }}</a>{% if not forloop.last %}, {% endif %}
+                                {% endfor %}
+                            </td>
+                            <td>
+                                {% for nearby_item in duplicate_group.nearby_pois %}
+                                    {{ nearby_item.distance|floatformat:1 }}m{% if not forloop.last %}, {% endif %}
+                                {% endfor %}
+                            </td>
+                            <td>{{ duplicate_group.main_poi.final_classification.label|default:"Unknown" }}</td>
+                            <td>{{ duplicate_group.main_poi.final_review_date|default:"Not reviewed" }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="5">No duplicate groups found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <nav aria-label="Pagination" class="usa-pagination">
+            <ul class="usa-pagination__list">
+            {% if page_obj.has_previous %}
+                <li class="usa-pagination__item usa-pagination__arrow">
+                <a class="usa-pagination__link" href="?page=1">
+                    <span class="usa-pagination__link-text">First</span>
+                </a>
+                </li>
+                <li class="usa-pagination__item usa-pagination__arrow">
+                <a class="usa-pagination__link" href="?page={{ page_obj.previous_page_number }}">
+                    <span class="usa-pagination__link-text">Previous</span>
+                </a>
+                </li>
+            {% endif %}
+
+            <li class="usa-pagination__item usa-pagination__page-no">
+                <span class="usa-pagination__link-text">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+            </li>
+
+            {% if page_obj.has_next %}
+                <li class="usa-pagination__item usa-pagination__arrow">
+                <a class="usa-pagination__link" href="?page={{ page_obj.next_page_number }}">
+                    <span class="usa-pagination__link-text">Next</span>
+                </a>
+                </li>
+                <li class="usa-pagination__item usa-pagination__arrow">
+                <a class="usa-pagination__link" href="?page={{ page_obj.paginator.num_pages }}">
+                    <span class="usa-pagination__link-text">Last</span>
+                </a>
+                </li>
+            {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</section>
+</body>
+{% include 'sections/footer.html' %}
+</html>

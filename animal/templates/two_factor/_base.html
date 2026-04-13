@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block title %}{% block title_tag %}Two-Factor Authentication{% endblock %}{% endblock %}
+
+{% block content %}
+<div class="usa-section padding-top-4">
+  <div class="grid-container">
+    <div class="grid-row">
+      <div class="margin-bottom-2">
+        <img src="/static/gaia-logo.png" alt="GAIA Logo" class="usa-logo__img" width="25%">
+      </div>
+      <div class="grid-col-6 bg-white padding-y-3 padding-x-5 border border-base-lighter">
+        {% block page_title %}
+        <h1 class="margin-bottom-0">{% trans "Authentication" %}</h1>
+        {% endblock %}
+        
+        {% block form_content %}
+        <!-- Two-factor authentication content goes here -->
+        {% endblock %}
+        
+        {% block extra_content %}
+        <!-- Additional content can be added here -->
+        {% endblock %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

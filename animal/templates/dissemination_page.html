@@ -1,0 +1,90 @@
+{% load static %}
+{% include 'sections/header.html' %}
+<section class="grid-container usa-section padding-top-0">
+    <h1 class="margin-bottom-0">Export Results</h1>
+      {% if project %}
+        <p class="site-subheading margin-top-1" style="white-space: nowrap;">{{ project.label }}</p>
+      {% endif %}
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    <div class="grid-row flex-justify-center">
+        <div class="grid-col-12 tablet:grid-col-10 desktop:grid-col-12">
+            <div class="usa-card-group">
+                <div class="usa-card">
+                    <div class="usa-card__container">
+                        <div class="usa-card__header">
+                            <h3 class="usa-card__heading">Data Export</h3>
+                        </div>
+                        <div class="usa-card__body">
+                            <p>Export confirmed whale annotations for external analysis and reporting.</p>
+                            <!-- <a href="{% url 'export_whale_annotations_bas' project_id %}" 
+                               class="usa-button usa-button--primary usa-button--disabled"
+                               style="pointer-events: none; opacity: 0.5;"
+                               aria-disabled="true">
+                                Download BAS CSV
+                            </a> -->
+                            <a href="{% url 'export_whale_annotations_whalemap' project_id %}" 
+                               class="usa-button usa-button--parimary margin-left-1 js-csv-download-trigger"
+                               download>
+                                Download WhaleMap CSV
+                            </a>
+                            <a href="" class="" style="display:none;"></a><!--prevents odd styling at end of button group-->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="csv-download-toast"
+         class="display-none"
+         role="status"
+         aria-live="polite"
+         style="margin-top: 0.75rem; max-width: 24rem; background: #005ea2; color: #fff; padding: 0.75rem 1rem; border-radius: 0.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+        Your file is being prepared for download, please wait.
+    </div>
+
+    <script>
+        (function() {
+            const downloadLinks = document.querySelectorAll('.js-csv-download-trigger');
+            const downloadToast = document.getElementById('csv-download-toast');
+
+            const dismissEvents = ['click', 'keydown', 'scroll', 'touchstart'];
+
+            function hideDownloadToast() {
+                downloadToast.classList.add('display-none');
+            }
+
+            function armToastDismissOnInteraction() {
+                dismissEvents.forEach(function(eventName) {
+                    document.addEventListener(eventName, hideDownloadToast, {
+                        once: true,
+                        capture: true
+                    });
+                });
+            }
+
+            function showDownloadToast(event) {
+                if (!downloadToast) {
+                    return;
+                }
+
+                if (event && event.currentTarget && event.currentTarget.parentNode) {
+                    event.currentTarget.insertAdjacentElement('afterend', downloadToast);
+                }
+
+                downloadToast.classList.remove('display-none');
+
+                window.setTimeout(armToastDismissOnInteraction, 0);
+            }
+
+            downloadLinks.forEach(function(link) {
+                link.addEventListener('click', showDownloadToast);
+            });
+        })();
+    </script>
+</section>
+</body>
+{% include 'sections/footer.html' %}
+</html>

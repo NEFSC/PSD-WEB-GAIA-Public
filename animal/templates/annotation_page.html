@@ -1,0 +1,764 @@
+{% load static %} {% include 'sections/header.html' %}
+<style>
+  #gdal-map {
+    height: 50vh;
+    width: 100%;
+    position: relative;
+  }
+  #layer-switcher {
+    position: absolute;
+    bottom: 4rem;
+    right: 1rem;
+    width: 8rem;
+    background: white;
+    padding: 10px;
+    border-radius: 5px; /* Rounded corners */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Subtle shadow for better visibility */
+    z-index: 1000;
+  }
+   .ol-viewport .ol-overlaycontainer-stopevent .ol-zoom {
+      top: .5em;
+      right: .5em;
+      left: auto;  /* Override default left positioning */
+    }
+    
+    .truncated-text {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 150px;
+      display: inline-block;
+      position: relative;
+      cursor: help;
+    }
+    
+    .tooltip {
+      position: relative;
+      display: inline-block;
+    }
+    
+    .tooltip .tooltip-text {
+      visibility: hidden;
+      width: 300px;
+      background-color: #333;
+      color: #fff;
+      text-align: left;
+      border-radius: 6px;
+      padding: 8px;
+      position: absolute;
+      z-index: 1000;
+      bottom: 125%;
+      left: 50%;
+      margin-left: -150px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      font-size: 0.875rem;
+      word-wrap: break-word;
+      white-space: normal;
+    }
+    
+    .tooltip .tooltip-text::after {
+      content: "";
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      margin-left: -5px;
+      border-width: 5px;
+      border-style: solid;
+      border-color: #333 transparent transparent transparent;
+    }
+    
+    .tooltip:hover .tooltip-text {
+      visibility: visible;
+      opacity: 1;
+    }
+</style>
+<section class="usa-section padding-top-0 padding-bottom-0">
+  <div class="grid-row">
+    <div class="grid-col-3"></div>
+    <div class="grid-col-3">
+      <h1 class="margin-bottom-0">Annotate Points</h1>
+      {% if project %}
+        <p class="site-subheading margin-top-1" style="white-space: nowrap;">{{ project.label }}</p>
+      {% endif %}
+    </div>
+  </div>
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  {% if error_message %}
+  <div class="usa-alert usa-alert--error">
+    <div class="usa-alert__body">
+      <h3 class="usa-alert__heading">Error</h3>
+      <p class="usa-alert__text">An error has occurred:</p>
+      {{ error_message }}
+    </div>
+  </div>
+  {% endif %}
+  {% if not poi %}
+  <div class="usa-alert usa-alert--info grid-container" role="alert">
+    <div class="usa-alert__body">
+      <p class="usa-alert__text">
+        You're all caught up!
+      </p>
+    </div>
+  </div>
+  {% elif poi %}
+  <div class="grid-row flex-justify">
+    <div class="grid-col-2 padding-left-2 padding-top-2">
+                  <div class="padding-2">
+            <div class="grid-row">
+              <div class="grid-col"><strong>Catalog ID:</strong></div>
+              <div class="grid-col">{{ poi.catalog_id }}</div>
+            </div>
+            <div class="grid-row">
+              <div class="grid-col"><strong>Vendor ID:</strong></div>
+              <div class="grid-col tooltip">
+                <span class="truncated-text">{{ poi.vendor_id }}</span>
+                <span class="tooltip-text">{{ poi.vendor_id }}</span>
+              </div>
+            </div>
+            <div class="grid-row">
+              <div class="grid-col"><strong>Point ID:</strong></div>
+              <div class="grid-col">{{ poi.id }}</div>
+            </div>
+          </div>
+          <div class="padding-2">
+            <div class="grid-row">
+              <div class="grid-col"><strong>Date:</strong></div>
+              <div class="grid-col">{{poi.date_image_taken }}</div>
+            </div>
+            <div class="grid-row">
+              <div class="grid-col"><strong>Time:</strong></div>
+              <div class="grid-col">12:00 PM (EST)</div>
+            </div>
+            <div class="grid-row">
+              <div class="grid-col"><strong>Coordinates:</strong></div>
+              <div class="grid-col">-70.274856, 42.048362</div>
+            </div>
+          </div>
+
+          <div class="padding-2">
+            <div class="grid-row">
+              <div class="grid-col"><strong>Sensor:</strong></div>
+              <div class="grid-col">WorldView-3</div>
+            </div>
+            <!-- <div class="grid-row">
+              <div class="grid-col"><strong>Off Nadir Angle:</strong></div>
+              <div class="grid-col">12º</div>
+            </div>
+            <div class="grid-row">
+              <div class="grid-col"><strong>Sun Elevation:</strong></div>
+              <div class="grid-col">100</div>
+            </div>
+            <div class="grid-row">
+              <div class="grid-col"><strong>Cloud Cover:</strong></div>
+              <div class="grid-col">05%</div>
+            </div> -->
+          </div>
+          <div class="padding-2">
+            <a href="/project/{{poi.project_id}}/multiview/{{poi.vendor_id}}/poi/{{poi.id}}">View all points in this area</a><br>
+            <strong>Annotations Submitted:</strong> {{ total_annotations_by_user_in_project }}
+          </div>
+      {% if user_is_superuser %}
+      <div class="grid-row padding-x-1 padding-top-1">
+        <label class="usa-label" for="comments-textarea">Comments</label>
+        <textarea id="comments-textarea" name="final_comments" form="annotation_form" class="usa-textarea" rows="6" maxlength="5000">{{ final_comments|default_if_none:'' }}</textarea>
+      </div>
+      {% else %}
+      <div class="grid-row padding-x-1">
+        <label class="usa-label" for="comments-textarea">Comments</label>
+        {{ form.comments }}
+      </div>
+      {% endif %}
+      {% if user_is_superuser %}
+        <div class="grid-row padding-4">
+          <a type="button" aria-controls="remove-modal" data-open-modal class="usa-button usa-button--outline">
+                  Remove Point
+                </a>
+              </div>
+      {% endif %}
+    </div>
+      <div class="grid-container" style="margin-left:0;margin-right:0;width: 55%;max-width: 100%;height:70vh;">
+        <div id="osm-map" class="map padding-bottom-5" style="position: absolute; top: inherit; left: inherit; width: 55%; height: 70vh; z-index: 1;"></div>
+        <div id="gdal-map" class="map padding-bottom-5" style="position: absolute; top: inherit; left: inherit; width: 55%; height: 70vh; z-index: 2;">
+          <div id="layer-switcher">
+            <label>
+              <input type="radio" name="layer" value="street" />
+              Street Map
+            </label>
+            <br />
+            <label>
+              <input type="radio" name="layer" value="satellite" checked />
+              Satellite
+            </label><br>
+            <label>
+              <input type="checkbox" name="pointer" value="checked" checked />
+              Search Area
+            </label>
+            <br><br>
+            <button type="button" id="scale-1250-btn" class="usa-button usa-button--outline" style="font-size: 0.8rem; padding: 4px 8px;">
+              1:{{ project.zoom_level.value|default:1250 }} Scale
+            </button>
+          </div>
+          <div id="pointer-switcher">
+          </div>
+        </div>
+        <div class="grid-row controls flex-row" style="position:relative; top:69vh; z-index: 3;">
+          <div class="grid-col">
+            <label for="exposure">Brightness: </label>
+            <input
+              type="range"
+              id="exposure"
+              min="-0.5"
+              max="0.5"
+              step="0.1"
+              value="0"
+            />
+          </div>
+          <div class="grid-col">
+            <label for="contrast">Contrast: </label>
+            <input
+              type="range"
+              id="contrast"
+              min="-0.5"
+              max="0.5"
+              step="0.1"
+              value="0"
+            />
+          </div>
+          <div class="grid-col">
+            <label for="saturation">Saturation: </label>
+            <input
+              type="range"
+              id="saturation"
+              min="-0.5"
+              max="0.5"
+              step="0.1"
+              value="0"
+            />
+          </div>
+        </div>
+        
+      </div>
+      <div class="grid-col-3 form-container padding-x-2">
+          <form id="annotation_form" method="post">
+            {% csrf_token %}
+            <div class="grid-row">
+              <div class="grid-col-row padding-1">
+                <!-- Add Not Animal button that shows when Animal is selected -->
+                <div id="not-animal-button" class="grid-col padding-1" style="display:none;">
+                  <button type="button" class="usa-button usa-button--outline" id="revert-animal">
+                    Not Animal
+                  </button>
+                </div>
+                {{ form.classification }}
+              </div>
+              <div id="species-div" class="grid-col padding-1" style="display:none;">
+                <label class="usa-label" for="">Species <span class="text-red">*</span></label>
+                <hr class="usa-hr" />
+                {{ form.target }}
+              </div>
+              <div id="confidence-div" class="grid-col padding-1" style="display:none;">
+                <label class="usa-label" for="">Confidence <span class="text-red">*</span></label>
+                <hr class="usa-hr" />
+                {{ form.confidence }}
+              </div>
+              <div id="age-div" class="grid-col padding-1" style="display:none;">
+                <label class="usa-label" for="">Age <span class="text-red">*</span></label>
+                <hr class="usa-hr" />
+                {{ form.age }}
+              </div>
+            </div>
+            
+                <input type="hidden" name="poi" value="{{ poi.id }}">
+                <input type="hidden" name="user" value="{{ user.id }}">
+                <input type="hidden" name="form_type" value="form">
+                <div class="grid-row padding-top-4 padding-2">
+                  <button
+                    class="usa-button usa-button--big {% if user_is_superuser and annotations|length > 2  %}usa-button--secondary{% endif %}"
+                    type="submit"
+                  >
+                    {% if user_is_superuser and annotations|length > 2 %}Adjudicate{% else %}Submit{% endif %}
+                  </button>
+                </div>
+            
+          </form>
+
+          {% else %}
+            <div class="margin-x-auto text-center">
+            <h1>No points of interest available.</h1>
+            </div>
+
+          {% endif %}
+        </div>
+        </div>
+{% if poi and user_is_superuser and annotations|length > 2 %}
+<div class="grid-row margin-top-10 padding-x-2">
+  <div class="grid-col-12" style="max-width: 70rem; margin-left: auto; margin-right: auto;">
+    <div class="usa-section-heading padding-top-2">
+      <h2>Existing Comments</h2>
+    </div>
+    <div class="usa-table-container--scrollable" tabindex="0">
+      <table class="usa-table usa-table--stacked-header">
+        <thead>
+          <tr>
+            <th scope="col">User ID</th>
+            <th scope="col">Classification</th>
+            <th scope="col">Species</th>
+            <th scope="col">Confidence</th>
+            <th scope="col">Age</th>
+            <th scope="col">Comments</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for annotation in annotations %}
+          <tr>
+            <td data-label="User">{{ annotation.user.username }}</td>
+            <td data-label="Classification">{{ annotation.classification }}</td>
+            <td data-label="Species">{{ annotation.target }}</td>
+            <td data-label="Confidence">{{ annotation.confidence }}</td>
+            <td data-label="Age">{{ annotation.get_age_display }}</td>
+            <td data-label="Comments">{{ annotation.comments }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+<div class="usa-modal" id="remove-modal" aria-labelledby="modal-heading" aria-describedby="modal-description">
+  <div class="usa-modal__content">
+    <div class="usa-modal__main">
+      <h2 class="usa-modal__heading" id="modal-heading">
+        Remove this Point of Interest?
+      </h2>
+      <div class="usa-prose">
+        <p id="modal-description">
+          Removing this point will also remove any associated annotations.
+          <br><br>
+          Warning: this action is irreversible.
+        </p>
+      </div>
+      <div class="usa-modal__footer">
+        <ul class="usa-button-group">
+          <li class="usa-button-group__item">
+            {% if poi %}
+            <form method="post" action="{% url 'delete_point' project_id=poi.project_id poi_id=poi.id %}" style="display: inline;">
+              {% csrf_token %}
+              <button type="submit" class="usa-button usa-button--secondary">
+                Remove Point
+              </button>
+            </form>
+            {% else %}
+            <button type="button" class="usa-button usa-button--secondary" disabled>
+              Remove Point
+            </button>
+            {% endif %}
+          </li>
+          <li class="usa-button-group__item">
+            <button type="button" class="usa-button usa-button--unstyled padding-105 text-center" data-close-modal>
+              Go back
+            </button>
+          </li>
+        </ul>
+      </div>
+    </div>
+    <button type="button" class="usa-button usa-modal__close" aria-label="Close this window" data-close-modal>
+      <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+        <use xlink:href=""></use>
+      </svg>
+    </button>
+  </div>
+</div>
+      <script>
+        document.addEventListener("DOMContentLoaded", () => {
+          const group = document.querySelector("#classification-buttongroup");
+          const allButtons = group.querySelectorAll("button");
+          const notAnimalButtonDiv = document.getElementById("not-animal-button");
+          const revertButton = document.getElementById("revert-animal");
+          
+          // Function to handle button visibility based on Animal selection
+          function handleAnimalButtonVisibility() {
+            const animalButton = group.querySelector("button[data-value='14']");
+            const submitButton = document.querySelector("button[type='submit']");
+            
+            if (animalButton && animalButton.classList.contains("usa-button--active")) {
+              // Hide all buttons including the Animal button when Animal is selected
+              allButtons.forEach((btn) => {
+                btn.style.display = "none";
+              });
+              // Hide category labels too
+              group.querySelectorAll(".usa-button-group__label").forEach((label) => {
+                label.style.display = "none";
+              });
+              // Show Not Animal button
+              notAnimalButtonDiv.style.display = "block";
+              // Show submit button when Animal is selected
+              if (submitButton) {
+                submitButton.style.display = "";
+              }
+            } else {
+              // Show all buttons and labels when any other button is selected
+              allButtons.forEach((btn) => {
+                btn.style.display = "";
+              });
+              group.querySelectorAll(".usa-button-group__label").forEach((label) => {
+                label.style.display = "";
+              });
+              // Hide Not Animal button
+              notAnimalButtonDiv.style.display = "none";
+              // Hide submit button when Animal is not selected
+              if (submitButton) {
+                submitButton.style.display = "none";
+              }
+            }
+          }
+
+          // Add click event listener to revert button
+          revertButton.addEventListener("click", function() {
+            const animalButton = group.querySelector("button[data-value='14']");
+            const hiddenInput = group.nextElementSibling;
+            
+            // Remove active class from animal button
+            if (animalButton) {
+              animalButton.classList.remove("usa-button--active");
+            }
+            
+            // Clear the hidden input value
+            hiddenInput.value = "";
+            
+            // Update visibility
+            handleAnimalButtonVisibility();
+            
+            // Also hide species and confidence divs
+            const speciesDiv = document.getElementById("species-div");
+            const confidenceDiv = document.getElementById("confidence-div");
+            const ageDiv = document.getElementById("age-div");
+            const speciesRadios = speciesDiv.querySelectorAll("input[type='radio']");
+            const confidenceRadios = confidenceDiv.querySelectorAll("input[type='radio']");
+            const ageRadios = ageDiv.querySelectorAll("input[type='radio']");
+            
+            speciesDiv.style.display = "none";
+            confidenceDiv.style.display = "none";
+            ageDiv.style.display = "none";
+            speciesRadios.forEach(radio => radio.checked = false);
+            confidenceRadios.forEach(radio => radio.checked = false);
+            ageRadios.forEach(radio => radio.checked = false);
+          });
+
+          // Initial check on page load
+          handleAnimalButtonVisibility();
+
+          // Add click event listeners to all buttons
+          allButtons.forEach((button) => {
+            button.addEventListener("click", function () {
+              const hiddenInput = group.nextElementSibling;
+
+              // Remove active class from all buttons
+              allButtons.forEach((btn) => {
+                btn.classList.remove("usa-button--active");
+              });
+
+              // Add active class to the clicked button
+              this.classList.add("usa-button--active");
+
+              // Update the hidden input value
+              hiddenInput.value = this.getAttribute("data-value");
+
+              // Handle visibility based on Animal button selection
+              handleAnimalButtonVisibility();
+            });
+          });
+        });
+      </script>
+      <script>
+        document.addEventListener("DOMContentLoaded", () => {
+          const buttons = document.querySelectorAll("#classification-buttongroup button");
+          const speciesDiv = document.getElementById("species-div");
+          const confidenceDiv = document.getElementById("confidence-div");
+          const ageDiv = document.getElementById("age-div");
+          const speciesRadios = speciesDiv.querySelectorAll("input[type='radio']");
+          const confidenceRadios = confidenceDiv.querySelectorAll("input[type='radio']");
+          const ageRadios = ageDiv.querySelectorAll("input[type='radio']");
+
+          function toggleDivs() {
+        const animalButton = document.querySelector("#classification-buttongroup button[data-value='14']");
+        if (animalButton && animalButton.classList.contains("usa-button--active")) {
+          speciesDiv.style.display = "block";
+          confidenceDiv.style.display = "block";
+          ageDiv.style.display = "block";
+
+          if (!Array.from(ageRadios).some((radio) => radio.checked)) {
+            const adultAgeRadio = ageDiv.querySelector("input[type='radio'][value='adult']");
+            if (adultAgeRadio) {
+              adultAgeRadio.checked = true;
+            }
+          }
+        } else {
+          speciesDiv.style.display = "none";
+          confidenceDiv.style.display = "none";
+          ageDiv.style.display = "none";
+          speciesRadios.forEach(radio => radio.checked = false);
+          confidenceRadios.forEach(radio => radio.checked = false);
+          ageRadios.forEach(radio => radio.checked = false);
+        }
+          }
+
+          buttons.forEach((button) => {
+        button.addEventListener("click", toggleDivs);
+          });
+
+          // Initial check
+          toggleDivs();
+        });
+      </script>
+      <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+      <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const form = document.querySelector("#annotation_form");
+
+      form.addEventListener("submit", (e) => {
+        e.preventDefault(); // Prevent immediate form submission
+        const animalButton = document.querySelector("#classification-buttongroup button[data-value='14']");
+        if (animalButton && animalButton.classList.contains("usa-button--active")) {
+          confetti({
+            startVelocity: 50,
+            spread: 90,
+            particleCount: 50,
+            origin: { y: 0.4 }
+          });
+        
+          // Wait 1 second before submitting the form
+          setTimeout(() => {
+            form.submit();
+          }, 1500);
+        } else {
+          form.submit(); // Submit immediately if not animal classification
+        }
+      });
+    });
+      </script>
+      <script src="https://cdn.jsdelivr.net/npm/geotiff"></script>
+      <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/ol@10.1.0/ol.css"
+      />
+      <script src="https://cdn.jsdelivr.net/npm/ol@v10.1.0/dist/ol.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.6.0/proj4.js"></script>
+      <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+      <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet/dist/leaflet.css"
+      />
+
+      <script>
+		// Ensure variables are passed correctly
+    const latitude = Number("{{ latitude }}");
+    const longitude = Number("{{ longitude }}");
+    const cogUrl = "{{ cogurl }}";
+    const projectScale = Number("{{ project.zoom_level.value|default:1250 }}");
+
+		// Map Initialization
+		window.onload = function() {
+			// Initialize maps, points, and other layers here
+			initializeMaps();
+		};
+
+		function initializeMaps() {
+			// Re-initialize the maps based on the provided latitude, longitude, and COG URL
+			const point = new ol.Feature({
+				geometry: new ol.geom.Point(ol.proj.fromLonLat([longitude, latitude])),
+				name: 'Point of Interest',
+			});
+
+      const cogSource = new ol.source.GeoTIFF({
+        sources: [{
+          url: new URL(cogUrl, window.location.origin).toString()
+        }]
+      });
+			const baseLayer = new ol.layer.Tile({ source: new ol.source.OSM() });
+			const vectorSource = new ol.source.Vector({ features: [point] });
+      const vectorLayer = new ol.layer.Vector({
+        source: vectorSource,
+        style: new ol.style.Style({
+          image: new ol.style.Circle({
+            fill: new ol.style.Fill({ color: 'rgba(0,0,0,0)' }),
+            stroke: new ol.style.Stroke({ 
+              color: 'rgba(128, 128, 128, 0.3)',
+              width: 2,
+              lineDash: [3, 3] // Creates a dotted line pattern
+            }),
+            radius: 64
+          })
+        }),
+        
+				});
+
+
+			const variables = {
+				exposure: 0,
+				contrast: 0,
+				saturation: 0,
+			};
+
+        // Initialize the COG image layer
+        const cogLayer = new ol.layer.WebGLTile({
+			style: {
+				exposure: ['var', 'exposure'],
+				contrast: ['var', 'contrast'],
+				saturation: ['var', 'saturation'],
+				variables: variables,
+			},
+			source: cogSource,
+			attributions: 'GAIA',
+		});
+
+		// Load saved settings and initialize controls
+		window.ImageAdjustmentPersistence.initializeControls(variables, cogLayer);
+		
+		// Setup event listeners for persistence
+		window.ImageAdjustmentPersistence.setupEventListeners(cogLayer);
+
+		const osmMap = new ol.Map({
+			target: 'osm-map',
+			layers: [baseLayer, vectorLayer],
+			view: new ol.View({
+				center: ol.proj.fromLonLat([longitude, latitude]),
+				zoom: 19,
+			}),
+		});
+
+		// Reusable function to set map scale
+		function setMapScale(map, scale) {
+			const view = map.getView();
+			const projection = view.getProjection();
+			const center = view.getCenter();
+			
+			// Nominal pixel size in meters (0.28 mm, matches ScaleLine's web assumption ~90.7 DPI)
+			const pixelSizeMeters = 0.00028;
+			
+			// Desired local resolution (meters per pixel) for the scale
+			let localResolution = scale * pixelSizeMeters;
+			
+			// Adjust for latitude-dependent scaling in EPSG:3857
+			const factor = ol.proj.getPointResolution(projection, 1, center);
+			const viewResolution = localResolution / factor;
+			
+			view.setResolution(viewResolution);
+		}
+
+		const gdalMap = new ol.Map({
+			target: 'gdal-map',
+			layers: [baseLayer, cogLayer, vectorLayer],
+			view: osmMap.getView(),
+		});
+
+		// Enhanced ScaleLine control with text display
+		const scaleLineControl = new ol.control.ScaleLine({
+			units: 'metric',
+			bar: true,
+			steps: 4,
+			text: true,
+			minWidth: 140,
+		});
+		gdalMap.addControl(scaleLineControl);
+		
+    // Set initial scale from the project's configured zoom level.
+		setTimeout(() => {
+      setMapScale(gdalMap, projectScale);
+		}, 100);
+
+        document.querySelectorAll('input[name="layer"]').forEach((input) => {
+        	input.addEventListener('change', (event) => {
+        		const value = event.target.value;
+        		baseLayer.setVisible(value === 'street');
+        		cogLayer.setVisible(value === 'satellite');
+        	});
+        });
+        document.querySelector('input[name="pointer"]').addEventListener('change', (event) => {
+          vectorLayer.setVisible(event.target.checked);
+        });
+        
+        // Add event listener for scale button
+        document.getElementById('scale-1250-btn').addEventListener('click', () => {
+          setMapScale(gdalMap, projectScale);
+        });
+      // Add context menu for coordinate copying
+      const contextMenuContainer = document.createElement('div');
+      contextMenuContainer.className = 'ol-contextmenu';
+      contextMenuContainer.style.cssText = 'position: absolute; background: white; border: 1px solid #ccc; padding: 5px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); display: none; z-index: 1000;';
+      document.body.appendChild(contextMenuContainer);
+
+      let clickedCoordinate = null;
+
+      // Function to show context menu with coordinate copying option
+      function showContextMenu(coordinate, pixel) {
+        clickedCoordinate = coordinate;
+        const lonLat = ol.proj.toLonLat(coordinate);
+        
+        const formattedLon = lonLat[0].toFixed(6);
+        const formattedLat = lonLat[1].toFixed(6);
+        
+        contextMenuContainer.innerHTML = `
+          <div style="cursor: pointer; padding: 8px;" id="copy-coordinates">
+            Copy coordinates: ${formattedLon}, ${formattedLat}
+          </div>
+        `;
+        
+        contextMenuContainer.style.left = `${pixel[0]}px`;
+        contextMenuContainer.style.top = `${pixel[1]}px`;
+        contextMenuContainer.style.display = 'block';
+        
+        document.getElementById('copy-coordinates').addEventListener('click', function() {
+          const coordText = `${formattedLon},${formattedLat}`;
+          navigator.clipboard.writeText(coordText)
+            .then(() => {
+              const successMsg = document.createElement('div');
+              successMsg.textContent = 'Coordinates copied!';
+              successMsg.style.cssText = 'position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #4CAF50; color: white; padding: 10px; border-radius: 4px; z-index: 2000;';
+              document.body.appendChild(successMsg);
+              
+              setTimeout(() => {
+                document.body.removeChild(successMsg);
+              }, 2000);
+              
+              contextMenuContainer.style.display = 'none';
+            })
+            .catch(err => {
+              console.error('Failed to copy coordinates: ', err);
+            });
+        });
+      }
+
+      // Add right-click event handler to the map
+      gdalMap.getViewport().addEventListener('contextmenu', function (evt) {
+        evt.preventDefault();
+        
+        const pixel = [evt.clientX, evt.clientY];
+        const coordinate = gdalMap.getCoordinateFromPixel(pixel);
+        
+        showContextMenu(coordinate, pixel);
+      });
+
+      // Hide context menu when clicking elsewhere
+      document.addEventListener('click', function(evt) {
+        if (evt.target.closest('.ol-contextmenu') === null) {
+          contextMenuContainer.style.display = 'none';
+        }
+      });
+
+      // Hide context menu when dragging the map
+      gdalMap.on('pointerdrag', function() {
+        contextMenuContainer.style.display = 'none';
+      });
+    }
+    </script>
+  </div>
+</section>
+</body>
+{% include 'sections/footer.html' %}
+</html>

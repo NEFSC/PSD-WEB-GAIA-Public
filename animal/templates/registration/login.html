@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+
+{% block title %}GAIA Login{% endblock %}
+
+{% block content %}
+<!-- <section class="grid-container usa-section"> -->
+<div class="usa-section padding-top-4">
+  <div class="grid-container">
+    <div class="grid-row">
+      <div class="margin-bottom-2"></div>
+        <img src="/static/gaia-logo.png" alt="GAIA Logo" class="usa-logo__img" width="25%">
+      </div>
+      <div class="grid-col-6 bg-white padding-y-3 padding-x-5 border border-base-lighter">
+        <h1 class="margin-bottom-0">Sign in</h1>
+        <form class="usa-form" method="POST">
+          {% csrf_token %}
+          <fieldset class="usa-fieldset">
+            <label class="usa-label" for="id_username"> Username </label>
+            <input
+              class="usa-input"
+              id="id_username"
+              name="username"
+              type="text"
+              autocapitalize="off"
+              autocorrect="off"
+              autocomplete="off"
+              required
+              maxlength="150"
+            />
+
+            <label class="usa-label" for="password-sign-in">
+              Password
+            </label>
+            <input
+              class="usa-input"
+              id="password-sign-in"
+              name="password"
+              type="password"
+              autocomplete="off"
+              required
+            />
+            <p class="usa-form__note">
+              <button
+                title="Toggle password"
+                type="button"
+                href="javascript:void(0);"
+                class="usa-show-password"
+                data-show-text="Show password"
+                data-hide-text="Hide password"
+                aria-controls="password-sign-in"
+                >Show password</button
+              >
+            </p>
+
+            <input class="usa-button" type="submit" value="Sign in" />
+            {% if form.non_field_errors %}
+            <div class="usa-alert usa-alert--error" role="alert">
+              <div class="usa-alert__body">
+                <p class="usa-alert__text" style="margin-left: 0;">
+                    {% for error in form.non_field_errors %}
+                      {{ error }}
+                    {% endfor %}
+                </p>
+              </div>
+            </div>
+            {% endif %}
+
+            <p>
+              <a href="../../accounts/password_reset" title="Forgot password">
+                Forgot password?
+              </a>
+            </p>
+          </fieldset>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,417 @@
+{% load static %}
+{% include 'sections/header.html' %}
+<style>
+    .results-container {
+        max-height: 600px;
+        border: 1px solid #ddd;
+        background-color: #f9f9f9;
+    }
+    .results-container.has-results {
+        background-color: white;
+    }
+    .map-container h3, .results-container h3 {
+        margin-top: 0;
+        margin-bottom: 1rem;
+        color: #1b1b1b;
+    }
+    @media (max-width: 768px) {
+        .grid-col-6 {
+            grid-column: span 12;
+        }
+        .results-container, #map {
+            height: 300px;
+        }
+    }
+    .usa-date-range-picker__calendar,
+    .usa-date-picker__calendar {
+    z-index: 1001;
+    }
+    .usa-date-range-picker,
+    .usa-date-picker {
+    position: relative;   /* establishes a stacking context for the calendar */
+    z-index: 1001;
+    overflow: visible;    /* avoid clipping the calendar */
+    }
+</style>
+<section class="usa-section padding-top-0 padding-bottom-0">
+  <div class="grid-row">
+    <div class="grid-col-3"></div>
+    <div class="grid-col-3">
+        <h1 class="margin-bottom-0">Load Imagery</h1>
+        {% if project %}
+            <p class="site-subheading margin-top-1" style="white-space: nowrap;">{{ project.label }}</p>
+        {% endif %}
+    </div>
+  </div>
+  
+  <!-- Messages section at the top -->
+  {% if messages %}
+    <div class="grid-row">
+      <div class="grid-col-12">
+        {% for message in messages %}
+          <div class="usa-alert {% if message.tags == 'error' %}usa-alert--error{% elif message.tags == 'success' %}usa-alert--success{% elif message.tags == 'warning' %}usa-alert--warning{% else %}usa-alert--info{% endif %}" role="alert">
+            <div class="usa-alert__body">
+              <p class="usa-alert__text">{{ message }}</p>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+  
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    <div class="grid-row">
+        <div class="form-container grid-col-12">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="grid-row">
+                    <div class="grid-col-6 padding-left-2 padding-top-2">
+                        <fieldset class="usa-fieldset">
+                            <div class="usa-form-group">
+                                <strong>{{ form.search_mode.label_tag }}</strong>
+                                {{ form.search_mode }}
+                                {% if form.search_mode.errors %}
+                                    <div class="usa-error-message">{{ form.search_mode.errors }}</div>
+                                {% endif %}
+                            </div>
+                            <div id="aoi-search-fields">
+                                <div class="usa-form-group">
+                                    <strong>{{ form.aoi.label_tag }}</strong>
+                                    {{ form.aoi }}
+                                    {% if form.aoi.errors %}
+                                        <div class="usa-error-message">{{ form.aoi.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div id="id-search-fields" style="display: none;">
+                                <div class="usa-form-group">
+                                    <label class="usa-label" for="{{ form.id_geojson_file.id_for_label }}"><strong>{{ form.id_geojson_file.label }}</strong></label>
+                                    <span class="usa-hint">Upload a GeoJSON file. Vendor ID is parsed from GeoJSON name (filename fallback).</span>
+                                    {{ form.id_geojson_file }}
+                                    {% if form.id_geojson_file.errors %}
+                                        <div class="usa-error-message">{{ form.id_geojson_file.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="usa-date-range-picker grid-row" style="max-width:70%;">
+                                <div class="usa-form-group grid-col">
+                                    <label class="usa-label" id="event-date-start-label" for="event-date-start"><strong>{{ form.start_date.label_tag }}</strong></label>
+                                    <div class="usa-hint" id="event-date-start-hint">mm/dd/yyyy</div>
+                                    {% if form.start_date.errors %}
+                                        <div class="usa-error-message">{{ form.start_date.errors }}</div>
+                                    {% endif %}
+                                    <div class="usa-date-picker" data-default-value="{% if form.start_date.value %}{{ form.start_date.value|date:'Y-m-d' }}{% endif %}">
+                                        {{ form.start_date }}
+                                    </div>
+                                </div>
+                                <div class="usa-form-group grid-col">
+                                    <label class="usa-label" id="event-date-end-label" for="event-date-end"><strong>{{ form.end_date.label_tag }}</strong></label>
+                                    <div class="usa-hint" id="event-date-end-hint">mm/dd/yyyy</div>
+                                    {% if form.end_date.errors %}
+                                        <div class="usa-error-message">{{ form.end_date.errors }}</div>
+                                    {% endif %}
+                                    <div class="usa-date-picker" data-default-value="{% now 'Y-m-d' %}">
+                                        {{ form.end_date }}
+                                    </div>
+                                </div>
+                            </div>
+                        </fieldset>
+                    </div>
+                    <div class="grid-col-6 padding-right-2 padding-top-2">
+                        <fieldset class="usa-fieldset">
+                            <div style="display: flex; gap: 2rem; align-items: flex-start;">
+                                <div class="usa-form-group  padding-right-2">
+                                    <strong>{{ form.api.label_tag }}</strong>
+                                    {{ form.api }}
+                                    {% if form.api.errors %}
+                                        <div class="usa-error-message">{{ form.api.errors }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="usa-form-group padding-right-2" style="flex: 1;">
+                                    <strong>{{ form.sensor.label_tag }}</strong>
+                                    {{ form.sensor }}
+                                    {% if form.sensor.errors %}
+                                        <div class="usa-error-message">{{ form.sensor.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="usa-form-group">
+                                <strong>Product Type: </strong><i>The GAIA cloud application currently supports only Level 1B imagery from Maxar Technologies accessed via USGS EarthExplorer.</i>
+                            </div>
+                        </fieldset>
+                    </div>
+                </div>
+                <div class="grid-row">
+                    <div class="grid-col-12 padding-left-2 padding-top-2">
+                        <button type="submit" class="usa-button">View Results</button>
+                    </div>
+                </div>
+            </form>
+        </div>       
+    </div>
+    <div class="grid-row">
+        <div class="grid-col-4 map-container padding-4">
+            <div id="map" class="map" style="height: 600px; border: 1px solid #ddd;"></div>
+        </div>
+        <div class="grid-col-8 padding-top-5 padding-left-2">
+            <div class="results-container {% if results %}has-results{% endif %}">
+                {% if results %}
+                    <div class="padding-2">
+                        <h3 class="usa-prose margin-top-0">Results</h3>
+                        {% if message %}
+                            <div class="usa-alert usa-alert--info usa-alert--slim">
+                                <div class="usa-alert__body">
+                                    <p class="usa-alert__text">{{ message }}</p>
+                                </div>
+                            </div>
+                        {% endif %}
+                        <form method="POST">
+                            {% csrf_token %}
+                            <div class="margin-top-2">
+                                {{ results|safe }}
+                            </div>
+                            <div class="usa-button-group margin-top-3" style="display: flex; align-items: center; gap: 1rem;">
+                                <button type="submit" name="extracted_selected" class="usa-button" id="add-imagery-btn">
+                                    Add Imagery to Project
+                                </button>
+                                <span id="selection-count" style="font-size: 0.875rem; color: #6c757d; font-weight: 500;">
+                                    {% if selection_limit %}0/{{ selection_limit }} selected{% else %}0 selected{% endif %}
+                                </span>
+                            </div>
+                        </form>
+                    </div>
+                {% elif request.method == 'POST' %}
+                    <div class="padding-2">
+                        <h3 class="usa-prose margin-top-0">Results</h3>
+                        <div class="usa-alert usa-alert--warning">
+                            <div class="usa-alert__body">
+                                <h4 class="usa-alert__heading">No Results Found</h4>
+                                <p class="usa-alert__text">No imagery data was found for the selected criteria. Please try adjusting your search parameters.</p>
+                            </div>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="padding-2">
+                        <h3 class="usa-prose margin-top-0">Results</h3>
+                        <div class="usa-alert usa-alert--info usa-alert--no-icon">
+                            <div class="usa-alert__body">
+                                <p class="usa-alert__text">Submit the form above to search for satellite imagery. Results will appear here.</p>
+                            </div>
+                        </div>
+                        <div class="usa-table-container--scrollable" style="opacity: 0.3;">
+                            <table class="usa-table usa-table--striped">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">
+                                            
+                                        </th>
+                                        <th scope="col">Catalog ID</th>
+                                        <th scope="col">Date</th>
+                                        <th scope="col">Sensor</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><input type="checkbox" disabled></td>
+                                        <td>Sample Catalog ID</td>
+                                        <td>November 07, 2024</td>
+                                        <td>Vantor WorldView-03</td>
+                                    </tr>
+                                    <tr>
+                                        <td><input type="checkbox" disabled></td>
+                                        <td>Another Catalog ID</td>
+                                        <td>...</td>
+                                        <td>...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        </div>
+</section>
+ <script>
+        // Initialize the map with a default view
+        var map = L.map('map').setView([39.8283, -98.5795], 4);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+        
+        // Force map to resize after a short delay to ensure container is properly sized
+        setTimeout(function() {
+            map.invalidateSize();
+        }, 100);
+        
+
+        
+        // If results are present, plot them on the map
+        {% if results_geojson %}
+        var resultsGeoJson = {{ results_geojson|safe }};
+        L.geoJSON(resultsGeoJson, {
+            onEachFeature: function (feature, layer) {
+                layer.bindPopup('<strong>ID:</strong>' + feature.properties['Vendor ID']);
+            }, style: {color: 'gray', fillOpacity: 0}
+        }).addTo(map);
+        {% endif %}
+
+                // If an area of interest is selected, plot it and zoom to its bounds
+        {% if area_of_interest_geojson %}
+        var areaOfInterest = {{ area_of_interest_geojson|safe }};
+        var aoiLayer = L.geoJSON(areaOfInterest, {style: {color: 'blue', fillOpacity: 0}}).addTo(map);
+        {% if aoi_bounds %}
+        var bounds = [[{{ aoi_bounds.1|safe }}, {{ aoi_bounds.0|safe }}], [{{ aoi_bounds.3|safe }}, {{ aoi_bounds.2|safe }}]];
+        map.fitBounds(bounds);
+        {% endif %}
+        {% endif %}
+        
+        // Handle window resize to properly resize map
+        window.addEventListener('resize', function() {
+            setTimeout(function() {
+                map.invalidateSize();
+            }, 100);
+        });
+
+        const selectionLimitRaw = "{{ selection_limit|default_if_none:'' }}";
+        const MAX_SELECTIONS = selectionLimitRaw === '' ? null : Number(selectionLimitRaw);
+
+        function toggleSearchModeFields() {
+            const selectedMode = document.querySelector('input[name="search_mode"]:checked');
+            const modeValue = selectedMode ? selectedMode.value : 'aoi';
+            const aoiFields = document.getElementById('aoi-search-fields');
+            const idFields = document.getElementById('id-search-fields');
+
+            if (aoiFields) {
+                aoiFields.style.display = modeValue === 'aoi' ? 'block' : 'none';
+            }
+            if (idFields) {
+                idFields.style.display = modeValue === 'id' ? 'block' : 'none';
+            }
+        }
+        
+        
+        
+        function toggleAllCheckboxes(source) {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"][name="selected"]');
+            let selectedCount = document.querySelectorAll('input[name="selected"]:checked').length;
+
+            if (source.checked) {
+                for (let i = 0; i < checkboxes.length; i++) {
+                    const checkbox = checkboxes[i];
+                    if (checkbox.disabled || checkbox.checked) {
+                        continue;
+                    }
+                    if (MAX_SELECTIONS !== null && selectedCount >= MAX_SELECTIONS) {
+                        break;
+                    }
+                    checkbox.checked = true;
+                    checkbox.dispatchEvent(new Event('change'));
+                    selectedCount++;
+                }
+
+                if (MAX_SELECTIONS !== null) {
+                    const totalAvailableCheckboxes = Array.from(checkboxes).filter(cb => !cb.disabled).length;
+                    if (selectedCount < totalAvailableCheckboxes) {
+                        source.checked = false;
+                    }
+                }
+            } else {
+                for (let i = 0; i < checkboxes.length; i++) {
+                    if (checkboxes[i].checked) {
+                        checkboxes[i].checked = false;
+                        checkboxes[i].dispatchEvent(new Event('change'));
+                    }
+                }
+            }
+        }
+
+        // Event listener for individual checkboxes
+        let individualCheckboxes = document.querySelectorAll('input[name="selected"]');
+
+        function updateCheckboxStates() {
+            let selectedCheckboxes = document.querySelectorAll('input[name="selected"]:checked');
+            let allCheckboxes = document.querySelectorAll('input[name="selected"]');
+            let selectedCount = selectedCheckboxes.length;
+
+            // Update selection count display
+            let countDisplay = document.getElementById('selection-count');
+            if (countDisplay) {
+                countDisplay.textContent = MAX_SELECTIONS === null
+                    ? `${selectedCount} selected`
+                    : `${selectedCount}/${MAX_SELECTIONS} selected`;
+
+                if (MAX_SELECTIONS !== null && selectedCount >= MAX_SELECTIONS) {
+                    countDisplay.style.color = '#d63384'; // Red when at limit
+                } else {
+                    countDisplay.style.color = '#6c757d'; // Gray when under limit
+                }
+            }
+
+            if (MAX_SELECTIONS === null) {
+                return;
+            }
+
+            // Disable/enable checkboxes based on selection count
+            allCheckboxes.forEach(function(checkbox) {
+                if (!checkbox.checked && selectedCount >= MAX_SELECTIONS) {
+                    checkbox.disabled = true;
+                    checkbox.closest('tr').style.opacity = '0.5';
+                } else if (checkbox.disabled) {
+                    checkbox.disabled = false;
+                    checkbox.closest('tr').style.opacity = '1';
+                }
+            });
+        }
+
+        function addHiddenInputsForCheckbox(checkbox) {
+            let tds = checkbox.closest('tr').querySelectorAll('td');
+            let tdValues = [];
+            tds.forEach(function (td) {
+                let textContent = td.textContent;
+                if (textContent !== undefined && textContent !== null) {
+                    tdValues.push(textContent.trim());
+                }
+            });
+            tdValues.forEach((value, index) => {
+                let hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = `row_data_${checkbox.value}_${index}`;
+                hiddenInput.value = value;
+                checkbox.form.appendChild(hiddenInput);
+            });
+        }
+
+        function removeHiddenInputsForCheckboxValue(value) {
+            document.querySelectorAll(`input[name^="row_data_${value}_"]`).forEach(input => input.remove());
+        }
+
+        individualCheckboxes.forEach(function (checkbox) {
+            checkbox.addEventListener('change', function () {
+                // When user checks/unchecks, handle this checkbox
+                if (checkbox.checked) {
+                    addHiddenInputsForCheckbox(checkbox);
+                } else {
+                    removeHiddenInputsForCheckboxValue(checkbox.value);
+                }
+
+                // Update checkbox states and count
+                updateCheckboxStates();
+            });
+        });
+
+        // Initialize states on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('input[name="search_mode"]').forEach(function(radio) {
+                radio.addEventListener('change', toggleSearchModeFields);
+            });
+            toggleSearchModeFields();
+            updateCheckboxStates();
+        });
+        
+</script>
+</body>
+{% include 'sections/footer.html' %}
+</html>

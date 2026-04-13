@@ -1,0 +1,237 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block title %}Setup Two-Factor Authentication{% endblock %}
+
+{% block content %}
+<div class="usa-section padding-top-4">
+  <div class="grid-container">
+    <div class="grid-row">
+      <div class="grid-col-12">
+        <h1>{% trans "Enable Two-Factor Authentication" %}</h1>
+        
+
+        <!-- Step Content -->
+        <div class="">
+          {% if wizard.steps.current == 'welcome' %}
+          <div class="usa-alert usa-alert--info" role="alert">
+            <div class="usa-alert__body">
+              <h4 class="usa-alert__heading">Enhanced Security Required</h4>
+              <p class="usa-alert__text">
+                Two-factor authentication is required for all GAIA accounts. 
+                Follow the steps below to set up your authenticator.
+              </p>
+            </div>
+          </div>
+          <div class="usa-alert usa-alert--warning margin-top-4" role="alert">
+            <div class="usa-alert__body">
+              <h4 class="usa-alert__heading">Important Notes</h4>
+              <ul class="usa-alert__text">
+                <li>Keep your authenticator app safe - you'll need it every time you log in</li>
+                <li>If you lose access to your authenticator app, contact your system administrator</li>
+                <li>The QR code and secret key are unique to your account - don't share them</li>
+              </ul>
+            </div>
+          </div>
+          {% elif wizard.steps.current == 'method' %}
+            <div class="grid-col-12">
+              <h2>Choose Authentication Method</h2>
+              <p>{% blocktrans trimmed %}Please select which authentication method you would
+                  like to use.{% endblocktrans %}</p>
+              
+              <!-- Add YubiKey option if available (DISABLED - using passkeys instead) -->
+              {% comment %}
+              {% if yubikey_available %}
+                <div class="usa-alert usa-alert--info margin-top-3" role="alert">
+                  <div class="usa-alert__body">
+                    <h4 class="usa-alert__heading">Hardware Security Keys Available</h4>
+                    <p class="usa-alert__text">
+                      YubiKey hardware tokens are available for enhanced security. 
+                      <a href="{% url 'yubikey_setup' %}" class="usa-link">Set up YubiKey OTP</a> 
+                      for hardware-based authentication.
+                    </p>
+                  </div>
+                </div>
+              {% endif %}
+              {% endcomment %}
+              
+              <!-- Add Passkey option if available -->
+              <div class="usa-alert usa-alert--success margin-top-3" role="alert">
+                <div class="usa-alert__body">
+                  <h4 class="usa-alert__heading">🔐 Passkeys Available (Recommended)</h4>
+                  <p class="usa-alert__text">
+                    Use modern passkeys with your device's built-in security (Touch ID, Face ID, Windows Hello) or security keys like YubiKey. 
+                    <a href="{% url 'webauthn_setup' %}" class="usa-link usa-link--external">Set up Passkey</a> 
+                    for the most secure and convenient authentication.
+                  </p>
+                  <div class="margin-top-2">
+                    <strong>Benefits:</strong>
+                    <ul class="margin-top-1">
+                      <li>Phishing-resistant</li>
+                      <li>No passwords or codes to remember</li>
+                      <li>Works with biometrics or PIN</li>
+                      <li>Industry standard (FIDO2/WebAuthn)</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% elif wizard.steps.current == 'generator' %}
+            <div class="grid-col-12">
+              <h2>Step 1: Install an Authenticator App</h2>
+              <p>Install one of these authenticator apps on your smartphone:</p>
+              <ul class="usa-list">
+                <li>Google Authenticator</li>
+                <li>Microsoft Authenticator</li>
+                <li>Authy</li>
+                <li>1Password</li>
+                <li>Any other TOTP-compatible app</li>
+              </ul>
+              <div class="grid-row">
+                <div class="grid-col-6">
+                  <h2>Step 2: Scan QR Code</h2>
+                  <p>{% blocktrans trimmed %}To start using a token generator, please use your
+                      smartphone to scan the QR code below. For example, use Google
+                      Authenticator.{% endblocktrans %}</p>
+                  
+                  <div class="margin-y-3">
+                    {% if QR_URL %}
+                      <img src="{{ QR_URL }}" alt="QR code for two-factor authentication setup" class="bg-white padding-2" style="border: 1px solid #ddd;">
+                    {% else %}
+                      <div class="usa-alert usa-alert--warning">
+                        <div class="usa-alert__body">
+                          <p class="usa-alert__text">QR code not available. Please use the manual entry code below.</p>
+                        </div>
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+                <div class="grid-col-6">
+                  <h3>Can't scan? Enter this code manually:</h3>
+                  <div class="usa-alert usa-alert--no-icon" style="background-color: #f8f8f8;">
+                    <div class="usa-alert__body">
+                      <p class="usa-alert__text" style="font-family: monospace; font-size: 14px; word-break: break-all;">
+                        {% translate "TOTP Secret:" %} <strong>{{ secret_key }}</strong>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <h2>Step 3: Verify Setup</h2>
+              <p>{% blocktrans %}Enter the one-time PIN generated by the app.{% endblocktrans %}</p>
+              
+              <!-- Alternative YubiKey Option -->
+              {% if yubikey_available %}
+                <div class="usa-alert usa-alert--info margin-top-4" role="alert">
+                  <div class="usa-alert__body">
+                    <h4 class="usa-alert__heading"><i class="fas fa-key"></i> Prefer a Hardware Key?</h4>
+                    <p class="usa-alert__text">
+                      For the strongest security, you can use a YubiKey hardware token instead of an app. 
+                      <a href="{% url 'yubikey_setup' %}" class="usa-link usa-link--external">
+                        Set up YubiKey authentication
+                      </a>
+                    </p>
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+
+          {% elif wizard.steps.current == 'validation' %}
+            <div class="grid-col-12">
+              <h2>Verify Your Code</h2>
+              {% if challenge_succeeded %}
+                {% if device.method == 'call' %}
+                  <p>{% blocktrans trimmed %}We are calling your phone right now, please enter the
+                    digits you hear.{% endblocktrans %}</p>
+                {% elif device.method == 'sms' %}
+                  <p>{% blocktrans trimmed %}We sent you a text message, please enter the tokens we
+                    sent.{% endblocktrans %}</p>
+                {% endif %}
+              {% else %}
+                <div class="usa-alert usa-alert--warning" role="alert">
+                  <div class="usa-alert__body">
+                    <h4 class="usa-alert__heading">Authentication Setup Issue</h4>
+                    <p class="usa-alert__text">{% blocktrans trimmed %}We've
+                      encountered an issue with the selected authentication method. This could be due to:{% endblocktrans %}</p>
+                    <ul class="usa-alert__text">
+                      <li>The PIN code may have expired (they change every 30 seconds)</li>
+                      <li>You may already have a two-factor device configured</li>
+                      <li>There may be a time synchronization issue with your device</li>
+                    </ul>
+                    <p class="usa-alert__text">{% blocktrans trimmed %}Please try generating a new code from your authenticator app, 
+                      or contact the site administrator if you continue to have issues.{% endblocktrans %}</p>
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+          {% endif %}
+        </div>
+
+        <!-- Form Section -->
+        <form class="usa-form" method="post">
+          {% csrf_token %}
+          {{ wizard.management_form }}
+          
+          <div class="grid-row">
+            <div class="grid-col-12">
+              <fieldset class="usa-fieldset">
+                {% for field in wizard.form %}
+                  <label class="usa-label margin-top-0" for="{{ field.id_for_label }}">
+                    {{ field.label }}
+                  </label>
+                   {% if field.field.widget.input_type == 'number' %}
+                    <input class="usa-input{% if field.errors %} usa-input--error{% endif %}" 
+                           type="text" 
+                           name="generator-token" 
+                           id="{{ field.id_for_label }}"
+                           value="{{ field.value|default:'' }}"
+                           inputmode="numeric"
+                           pattern="[0-9]*"
+                           maxlength="6"
+                           {% if field.field.required %}required{% endif %}>
+                  {% else %}
+                    {{ field }}
+                  {% endif %}
+                  {% if field.errors %}
+                    <div class="usa-alert usa-alert--error" role="alert">
+                      <div class="usa-alert__body">
+                        <p class="usa-alert__text">{{ field.errors|join:", " }}</p>
+                      </div>
+                    </div>
+                  {% endif %}
+                {% endfor %}
+              </fieldset>
+
+              <!-- Navigation Buttons -->
+              <div class="margin-top-3">
+                {% if wizard.steps.prev %}
+                  <button name="wizard_goto_step" type="submit" value="{{ wizard.steps.prev }}" class="usa-button usa-button--outline" formnovalidate>
+                    {% trans "Back" %}
+                  </button>
+                {% endif %}
+                
+                <button type="submit" class="usa-button margin-left-1">
+                  {% if wizard.steps.current == wizard.steps.last %}
+                    {% trans "Enable 2FA" %}
+                  {% else %}
+                    {% trans "Next" %}
+                  {% endif %}
+                </button>
+              </div>
+
+              {% if wizard.form.non_field_errors %}
+                <div class="usa-alert usa-alert--error margin-top-2" role="alert">
+                  <div class="usa-alert__body">
+                    <p class="usa-alert__text">{{ wizard.form.non_field_errors|join:", " }}</p>
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

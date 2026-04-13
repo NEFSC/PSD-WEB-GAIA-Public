@@ -1,0 +1,11 @@
+[
+  { "model": "animal.species_locations", "fields": { "aoi": 6, "species": 9 } },
+  { "model": "animal.species_locations", "fields": { "aoi": 15, "species": 9 } },
+  { "model": "animal.species_locations", "fields": { "aoi": 50, "species": 9 } },
+  { "model": "animal.species_locations", "fields": { "aoi": 124, "species": 9 } },
+
+  { "model": "animal.species_locations", "fields": { "aoi": 23, "species": 10 } },
+  { "model": "animal.species_locations", "fields": { "aoi": 24, "species": 10 } },
+  { "model": "animal.species_locations", "fields": { "aoi": 25, "species": 10 } },
+  { "model": "animal.species_locations", "fields": { "aoi": 26, "species": 10 } }
+]

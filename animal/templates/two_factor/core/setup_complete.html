@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block title %}Two-Factor Authentication Setup Complete{% endblock %}
+
+{% block content %}
+<div class="usa-section padding-top-4">
+  <div class="grid-container">
+    <div class="grid-row">
+      <div class="grid-col-12">
+        <div class="usa-alert usa-alert--success" role="alert">
+          <div class="usa-alert__body">
+            <h4 class="usa-alert__heading">Success!</h4>
+            <p class="usa-alert__text">
+              Two-factor authentication has been successfully enabled for your account.
+            </p>
+          </div>
+        </div>
+
+        <h1>Setup Complete</h1>
+        
+        <div class="grid-row grid-gap margin-top-4">
+          <div class="grid-col-6">
+            <h2>What's Next?</h2>
+            <ul class="usa-list">
+              <li>You'll now be prompted for a 6-digit code every time you log in</li>
+              <li>Keep your authenticator app installed and accessible</li>
+              <!-- <li>Your backup tokens (if any) are saved in your profile</li> -->
+            </ul>
+          </div>
+
+          <!-- <div class="grid-col-6">
+            <h2>Backup Tokens</h2>
+            {% if backup_tokens %}
+              <div class="usa-alert usa-alert--warning" role="alert">
+                <div class="usa-alert__body">
+                  <h4 class="usa-alert__heading">Save these backup tokens</h4>
+                  <p class="usa-alert__text">
+                    Each token can be used once if you lose access to your authenticator:
+                  </p>
+                  <div style="font-family: monospace; background: #f8f8f8; padding: 10px; margin: 10px 0;">
+                    {% for token in backup_tokens %}
+                      {{ token }}<br>
+                    {% endfor %}
+                  </div>
+                  <p class="usa-alert__text">
+                    <strong>Write these down and store them securely!</strong>
+                  </p>
+                </div>
+              </div>
+            {% endif %}
+          </div> -->
+        </div>
+
+        <div class="margin-top-4">
+          <a href="/" class="usa-button">Continue to GAIA</a>
+          <!-- <a href="{% url 'two_factor:profile' %}" class="usa-button usa-button--outline">
+            Manage Two-Factor Settings
+          </a> -->
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

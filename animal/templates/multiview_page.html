@@ -1,0 +1,2008 @@
+{% load static %}
+<!-- 
+PROXIMITY-BASED POI LOADING:
+When viewing a specific POI via /project/{project_id}/multiview/{vendor_id}/poi/{poi_id}/,
+POIs are loaded in order of proximity to the target POI ID number.
+This loads POIs closest to the target POI first (e.g., if viewing POI 7000,
+it loads POIs 6999, 7001, 6998, 7002, etc. in order of numerical proximity).
+-->
+{% include 'sections/header.html' %}
+<style>
+  #gdal-map {
+    height: 50vh;
+    width: 100%;
+    position: relative;
+  }
+  #layer-switcher {
+    position: absolute;
+    bottom: 4rem;
+    right: 1rem;
+    width: 8rem;
+    background: white;
+    padding: 10px;
+    border-radius: 5px; /* Rounded corners */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Subtle shadow for better visibility */
+    z-index: 1000;
+  }
+   .ol-viewport .ol-overlaycontainer-stopevent .ol-zoom {
+      top: .5em;
+      right: .5em;
+      left: auto;  /* Override default left positioning */
+    }
+    
+    /* Custom styling for drag box selection */
+    .ol-dragbox {
+      background-color: rgba(255, 255, 0, 0.3);
+      border: 2px dashed #ffff00;
+    }
+    
+    /* Styling for keyboard shortcuts */
+    kbd {
+      background-color: #f0f0f0;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      padding: 2px 4px;
+      font-family: monospace;
+      font-size: 0.9em;
+    }
+    
+    /* POI Scale Indicator styling */
+    #poi-scale-indicator {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 6px 10px;
+      border-radius: 4px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      font-size: 11px;
+      font-weight: 600;
+      z-index: 1001;
+      border: 1px solid #ddd;
+      border-left: 4px solid #66bb6a;
+      color: #333;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      user-select: none;
+      pointer-events: none;
+      transition: border-left-color 0.3s ease;
+    }
+
+    .multiview-info-alert--compact {
+      display: inline-block;
+      width: auto;
+      max-width: 42rem;
+    }
+
+    .multiview-info-alert-container--centered {
+      text-align: center;
+    }
+</style>
+<section class="usa-section padding-top-0 padding-bottom-0">
+  <div class="grid-row">
+    <div class="grid-col-3"></div>
+    <div class="grid-col-3">
+      <h1 class="margin-bottom-0">Annotate Batch</h1>
+      {% if project %}
+        <p class="site-subheading margin-top-1" style="white-space: nowrap;">{{ project.label }}</p>
+      {% endif %}
+    </div>
+  </div>
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  {% if error_message %}
+  <div class="usa-alert usa-alert--error">
+    <div class="usa-alert__body">
+      <h3 class="usa-alert__heading">Error</h3>
+      <p class="usa-alert__text">An error has occurred:</p>
+      {{ error_message }}
+    </div>
+  </div>
+  {% endif %}
+  {% if info_message %}
+  <div class="{% if all_annotated %}multiview-info-alert-container--centered{% endif %}">
+  <div class="usa-alert usa-alert--info margin-top-2 {% if all_annotated %}multiview-info-alert--compact{% endif %}" role="alert">
+    <div class="usa-alert__body">
+      <h3 class="usa-alert__heading">Info</h3>
+      <p class="usa-alert__text">{{ info_message }}</p>
+    </div>
+  </div>
+  </div>
+  {% endif %}
+
+  <div class="grid-row flex-justify">
+    <div class="grid-col-2 padding-left-2 padding-top-2">
+          <p><strong>Vendor ID:</strong> {{ vendor_id }}</p>
+          <div class="margin-top-1">
+            <button id="view-annotated-toggle" class="usa-button usa-button--outline usa-button--base" type="button">
+              View Annotated Points
+            </button>
+          </div>          
+          <div class="usa-alert usa-alert--info margin-top-2" role="alert">
+            <div class="usa-alert__body">
+              <h4 class="usa-alert__heading">Selection Methods</h4>
+              <p class="usa-alert__text">
+                <strong>Individual:</strong> Click on points on the map to select/deselect<br>
+                <strong>Area Select:</strong> Hold <kbd>Ctrl</kbd> (or <kbd>Cmd</kbd> on Mac) and drag on the map to select multiple points in an area<br>
+              </p>
+            </div>
+          </div>
+          
+          <form id="multiview_annotation_form" method="post">
+            {% csrf_token %}
+            
+            {% if pois %}
+            <div class="usa-section-heading padding-top-2">
+              <h2>Points of Interest </h2>
+            </div>
+            <div class="usa-table-container--scrollable" tabindex="0" style="max-height: 300px; overflow-y: auto;">
+              <table class="usa-table usa-table--stacked-header usa-table--sticky-header">
+                <thead>
+                  <tr>
+                    <th scope="col">POI ID</th>
+                    <th scope="col">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="selected-pois-table">
+                  <tr id="no-selection-message">
+                    <td colspan="2" class="text-center padding-2">
+                      <p class="font-sans-sm text-italic">Click on POIs on the map to select them</p>
+                    </td>
+                  </tr>
+                  {% for poi in pois %}
+                  <tr data-poi-id="{{ poi.id }}" class="poi-table-row" style="display: none;">
+                    <td data-label="POI ID"><a href="/project/{{ project_id }}/annotation/{{ poi.id }}/">{{ poi.id }}</a></td>
+                    <td data-label="Status">
+                      {% if poi.user_annotation %}
+                        <span class="usa-tag usa-tag--success">Annotated</span>
+                      {% else %}
+                        <span class="usa-tag">Pending</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- POI Count Display -->
+            <div class="margin-top-2">
+              <p><strong>Total POI's:</strong> {{ poi_count }} of {{ total_poi_count }}, <strong>Selected POI's:</strong> <span id="selected-count">0</span></p>
+              {% if page_obj.has_next %}
+              <div id="progressive-loading-status" style="font-size: 0.9em; color: #666; margin-top: 0.5rem;">
+                <span id="progressive-status-text">Loading more POIs in background...</span>
+                <button id="progressive-toggle" type="button" class="usa-button usa-button--unstyled" style="margin-left: 10px; font-size: 0.8em; text-decoration: underline;">Pause</button>
+              </div>
+              {% endif %}
+            </div>
+            
+            {% endif %}
+            
+            {% if user_is_superuser %}
+            <!-- <div class="usa-section-heading padding-top-2">
+              <h2>All Annotations</h2>
+            </div>
+            <div class="usa-table-container--scrollable" tabindex="0" style="max-height: 200px; overflow-y: auto;">
+              <table class="usa-table usa-table--stacked-header usa-table--sticky-header">
+                <thead>
+                  <tr>
+                    <th scope="col">POI ID</th>
+                    <th scope="col">User</th>
+                    <th scope="col">Classification</th>
+                    <th scope="col">Species</th>
+                    <th scope="col">Confidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for poi in pois %}
+                    {% for annotation in poi.annotations %}
+                    <tr>
+                      <td data-label="POI ID">{{ poi.id }}</td>
+                      <td data-label="User">{{ annotation.user }}</td>
+                      <td data-label="Classification">{{ annotation.classification }}</td>
+                      <td data-label="Species">{{ annotation.species }}</td>
+                      <td data-label="Confidence">{{ annotation.confidence }}</td>
+                    </tr>
+                    {% endfor %}
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div> -->
+            {% endif %}
+        <!-- Annotation page link (bottom left) -->
+        <a href="{% url 'annotation_page' project_id %}" class="usa-button usa-button--outline margin-top-1">Annotate Points</a>
+    </div>
+      <div class="grid-container" style="margin-left:0;margin-right:0;width: 55%;max-width: 100%;height:70vh;">
+        <div id="osm-map" class="map padding-bottom-5" style="position: absolute; top: inherit; left: inherit; width: 55%; height: 70vh; z-index: 1;"></div>
+        <div id="gdal-map" class="map padding-bottom-5" style="position: absolute; top: inherit; left: inherit; width: 55%; height: 70vh; z-index: 2;">
+          <div id="layer-switcher">
+            <label>
+              <input type="radio" name="layer" value="street" />
+              Street Map
+            </label>
+            <br />
+            <label>
+              <input type="radio" name="layer" value="satellite" checked />
+              Satellite
+            </label><br>
+            <label>
+              <input type="checkbox" name="pointer" value="checked" checked />
+              Search Area
+            </label>
+          </div>
+          <div id="pointer-switcher">
+          </div>
+        </div>
+        <div class="grid-row controls flex-row" style="position:relative; top:69vh; z-index: 3;">
+          <div class="grid-col">
+            <label for="exposure">Brightness: </label>
+            <input
+              type="range"
+              id="exposure"
+              min="-0.5"
+              max="0.5"
+              step="0.1"
+              value="0"
+            />
+          </div>
+          <div class="grid-col">
+            <label for="contrast">Contrast: </label>
+            <input
+              type="range"
+              id="contrast"
+              min="-0.5"
+              max="0.5"
+              step="0.1"
+              value="0"
+            />
+          </div>
+          <div class="grid-col">
+            <label for="saturation">Saturation: </label>
+            <input
+              type="range"
+              id="saturation"
+              min="-0.5"
+              max="0.5"
+              step="0.1"
+              value="0"
+            />
+          </div>
+        </div>
+        
+      </div>
+      <div class="grid-col-3 padding-x-2">
+          <div class="grid-row">
+            <div class="grid-col-row padding-1">
+              {{ form.classification }}
+            </div>
+            <div id="species-div" class="grid-col padding-1" style="display:none;">
+              <label class="usa-label" for="">Species <span class="text-red">*</span></label>
+              <hr class="usa-hr" />
+              {{ form.target }}
+            </div>
+            <div id="confidence-div" class="grid-col padding-1" style="display:none;">
+              <label class="usa-label" for="">Confidence <span class="text-red">*</span></label>
+              <hr class="usa-hr" />
+              {{ form.confidence }}
+            </div>
+            <div id="age-div" class="grid-col padding-1" style="display:none;">
+              <label class="usa-label" for="">Age <span class="text-red">*</span></label>
+              <hr class="usa-hr" />
+              {{ form.age }}
+            </div>
+            <div class="grid-col padding-1">
+              <label class="usa-label" for="comments-textarea">Comments</label>
+              {{ form.comments }}
+            </div>
+          </div>
+          
+          <div class="grid-row padding-top-4 padding-2">
+            <button
+              class="usa-button usa-button--big"
+              type="submit"
+              id="submit-annotations"
+              disabled
+              style="display: none;"
+            >
+              Submit Annotations
+            </button>
+          </div>
+          <input type="hidden" name="user" value="{{ user.id }}">
+          <input type="hidden" name="form_type" value="form">
+          </form>
+        </div>
+        
+        </div>
+      <script>
+        document.addEventListener("DOMContentLoaded", () => {
+          const group = document.querySelector("#classification-buttongroup");
+          const allButtons = group.querySelectorAll("button");
+          
+          // Function to handle button visibility based on Animal selection
+          function handleAnimalButtonVisibility() {
+            const animalButton = group.querySelector("button[data-value='14']");
+            const submitButton = document.querySelector("button[type='submit']");
+            
+            // If no POIs are selected, disable all classification buttons but keep the current selection
+            if (selectedPOIs.size === 0) {
+              allButtons.forEach((btn) => {
+                btn.disabled = true;
+              });
+              
+              // Hide submit button when no POIs are selected
+              if (submitButton) {
+                submitButton.style.display = 'none';
+              }
+              document.getElementById('species-div').style.display = 'none';
+              document.getElementById('confidence-div').style.display = 'none';
+              document.getElementById('age-div').style.display = 'none';
+              
+              // Also update map features to reflect deselected state
+              if (typeof vectorLayer !== 'undefined' && vectorLayer) {
+                const vectorSource = vectorLayer.getSource();
+                vectorSource.getFeatures().forEach(feature => {
+                  updateFeatureStyle(feature, false);
+                });
+              }
+              return;
+            }
+            
+            // Enable classification buttons when POIs are selected
+            allButtons.forEach((btn) => {
+              btn.disabled = false;
+            });
+            
+            if (animalButton && animalButton.classList.contains("usa-button--active")) {
+              // When Animal is selected, show submit button and species/confidence fields
+              if (submitButton) {
+                submitButton.style.display = 'block';
+              }
+              document.getElementById('species-div').style.display = 'block';
+              document.getElementById('confidence-div').style.display = 'block';
+              document.getElementById('age-div').style.display = 'block';
+
+              const ageRadios = document.querySelectorAll('#age-div input[type="radio"]');
+              const hasAgeSelection = Array.from(ageRadios).some(radio => radio.checked);
+              if (!hasAgeSelection) {
+                const adultAgeRadio = document.querySelector('#age-div input[type="radio"][value="adult"]');
+                if (adultAgeRadio) {
+                  adultAgeRadio.checked = true;
+                }
+              }
+            } else {
+              // For other classifications, hide submit button and species/confidence fields
+              if (submitButton) {
+                submitButton.style.display = 'none';
+              }
+              document.getElementById('species-div').style.display = 'none';
+              document.getElementById('confidence-div').style.display = 'none';
+              document.getElementById('age-div').style.display = 'none';
+              // Clear species and confidence selections
+              const speciesRadios = document.querySelectorAll('#species-div input[type="radio"]');
+              const confidenceRadios = document.querySelectorAll('#confidence-div input[type="radio"]');
+              const ageRadios = document.querySelectorAll('#age-div input[type="radio"]');
+              speciesRadios.forEach(radio => radio.checked = false);
+              confidenceRadios.forEach(radio => radio.checked = false);
+              ageRadios.forEach(radio => radio.checked = false);
+            }
+            
+            // Update submit button state based on selection and classification
+            updateSubmitButtonState();
+          }
+
+          // Initial check on page load
+          handleAnimalButtonVisibility();
+
+          // Add click event listeners to all buttons
+          allButtons.forEach((button) => {
+            button.addEventListener("click", function () {
+              // Don't allow clicks on disabled buttons
+              if (this.disabled) {
+                return;
+              }
+              
+              const hiddenInput = group.nextElementSibling;
+
+              // Remove active class from all buttons
+              allButtons.forEach((btn) => {
+                btn.classList.remove("usa-button--active");
+              });
+
+              // Add active class to the clicked button
+              this.classList.add("usa-button--active");
+
+              // Update the hidden input value
+              hiddenInput.value = this.getAttribute("data-value");
+
+              // Handle visibility based on Animal button selection
+              handleAnimalButtonVisibility();
+              
+              // Update submit button state
+              updateSubmitButtonState();
+              
+              // Optional: Auto-submit when non-Animal classification is selected
+              // Uncomment the lines below if you want immediate submission for non-Animal classifications
+              /*
+              const isAnimalClassification = this.getAttribute("data-value") === "14";
+              if (!isAnimalClassification && selectedPOIs.size > 0) {
+                // Auto-submit for non-Animal classifications
+                setTimeout(async () => {
+                  try {
+                    const form = document.querySelector("#multiview_annotation_form");
+                    await submitFormAjax(form);
+                  } catch (error) {
+                    console.error('Auto-submit error:', error);
+                  }
+                }, 100);
+              }
+              */
+            });
+          });
+        });
+      </script>
+      <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/geotiff"></script>
+      <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/ol@10.1.0/ol.css"
+      />
+      <script src="https://cdn.jsdelivr.net/npm/ol@v10.1.0/dist/ol.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.6.0/proj4.js"></script>
+      <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+      <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet/dist/leaflet.css"
+      />
+
+      <script>
+		// Ensure variables are passed correctly
+		const latitude = {{ latitude }}; //42.049081 //;
+		const longitude = {{ longitude }};  //-70.183762 //;
+    const cogUrl = "{{ cogurl }}";
+    const poisData = {{ pois_json|safe }};
+    
+    // Global variables
+    let gdalMap;
+    let osmMap;
+    let vectorLayer;
+    let selectedPOIs = new Set(); // Track selected POI IDs
+    let allPoisData = [...poisData]; // Copy initial POIs data
+    let totalPOICount = {{ total_poi_count }}; // Store total POI count for updates
+    let isAddPointsMode = false; // Track if add points mode is active
+
+		// Map Initialization
+		window.onload = function() {
+			// Initialize maps, points, and other layers here
+			initializeMaps();
+			
+			// Set up progressive loading controls
+			setupProgressiveLoadingControls();
+			
+			// Set up Add Points functionality
+			setupAddPointsControls();
+			
+			// Start progressive loading if we have more POIs to load
+			{% if page_obj.has_next %}
+			startProgressiveLoading();
+			{% endif %}
+		};
+		
+		// Global function to update submit button state
+		function updateSubmitButtonState() {
+			const submitButton = document.querySelector("button[type='submit']");
+			const classificationSelected = document.querySelector("#classification-buttongroup button.usa-button--active");
+			const classificationButtons = document.querySelectorAll("#classification-buttongroup button");
+			
+			// Enable/disable classification buttons based on POI selection
+			const hasPOIsSelected = selectedPOIs.size > 0;
+			classificationButtons.forEach(button => {
+				button.disabled = !hasPOIsSelected;
+			});
+			
+			// If no POIs are selected, update map features to deselected state
+			if (!hasPOIsSelected && typeof vectorLayer !== 'undefined' && vectorLayer) {
+				const vectorSource = vectorLayer.getSource();
+				if (vectorSource) {
+					vectorSource.getFeatures().forEach(feature => {
+						updateFeatureStyle(feature, false);
+					});
+				}
+			}
+			
+			// Check if Animal is selected
+			const animalButton = document.querySelector("#classification-buttongroup button[data-value='14']");
+			const isAnimalSelected = animalButton && animalButton.classList.contains("usa-button--active");
+			
+			// If Animal is selected, also check for species and confidence
+			let isValid = selectedPOIs.size > 0 && classificationSelected;
+			
+			if (isAnimalSelected) {
+				const speciesSelected = document.querySelector('#species-div input[type="radio"]:checked');
+				const confidenceSelected = document.querySelector('#confidence-div input[type="radio"]:checked');
+        const ageSelected = document.querySelector('#age-div input[type="radio"]:checked');
+        isValid = isValid && speciesSelected && confidenceSelected && ageSelected;
+			}
+			
+			// Enable submit button only if all conditions are met
+			if (submitButton) {
+				submitButton.disabled = !isValid;
+			}
+		}
+
+		// Progressive loading system - loads POIs automatically in background
+		let progressiveLoadingEnabled = true;
+		let progressiveLoadingTimeout = null;
+    let currentProgressivePage = {{ initial_next_page_number|default_if_none:"null" }};
+		
+		function startProgressiveLoading() {
+			// Start progressive loading after a short delay to let initial render complete
+			progressiveLoadingTimeout = setTimeout(() => {
+				loadNextBatchProgressively();
+			}, 2000); // Wait 2 seconds before starting background loading
+		}
+		
+		async function loadNextBatchProgressively() {
+			if (!progressiveLoadingEnabled || !currentProgressivePage) {
+				return;
+			}
+			
+			try {
+				console.log(`Progressive loading: Loading page ${currentProgressivePage} in background`);
+				
+				const url = `${window.location.pathname}?page=${currentProgressivePage}`;
+				const response = await fetch(url, {
+					headers: {
+						'X-Requested-With': 'XMLHttpRequest',
+						'Accept': 'application/json'
+					}
+				});
+				
+				if (!response.ok) {
+					throw new Error(`HTTP error! status: ${response.status}`);
+				}
+				
+				const data = await response.json();
+
+        if (!Array.isArray(data.pois) || data.pois.length === 0) {
+          progressiveLoadingEnabled = false;
+          currentProgressivePage = null;
+          if (progressiveLoadingTimeout) {
+            clearTimeout(progressiveLoadingTimeout);
+            progressiveLoadingTimeout = null;
+          }
+          updateProgressiveLoadingStatus();
+          console.log('Progressive loading complete: No additional POIs returned');
+          return;
+        }
+				
+				// Add new POIs to the map and table silently
+				addPOIsToMap(data.pois);
+				addPOIsToTable(data.pois);
+				
+				// Update the global POIs data and total count
+				allPoisData = allPoisData.concat(data.pois);
+				totalPOICount = data.total_poi_count;
+				
+				// Update POI count display
+				const selectedCountSpan = document.getElementById('selected-count');
+				if (selectedCountSpan) {
+					const poiCountParagraph = selectedCountSpan.closest('p');
+					if (poiCountParagraph) {
+						poiCountParagraph.innerHTML = `<strong>Total POI's:</strong> ${allPoisData.length} of ${totalPOICount}, <strong>Selected POI's:</strong> <span id="selected-count">${selectedPOIs.size}</span>`;
+					}
+				}
+				
+
+				
+				// Set up next batch if available
+				if (data.has_next) {
+					currentProgressivePage = data.next_page_number;
+					// Schedule next batch with a longer delay to avoid overwhelming the system
+					progressiveLoadingTimeout = setTimeout(() => {
+						loadNextBatchProgressively();
+					}, 5000); // Wait 5 seconds between background loads
+				} else {
+					// All POIs loaded
+					progressiveLoadingEnabled = false;
+					currentProgressivePage = null;
+					updateProgressiveLoadingStatus();
+					console.log('Progressive loading complete: All POIs loaded');
+				}
+				
+			} catch (error) {
+				console.error('Error in progressive loading:', error);
+				// Stop progressive loading on error to avoid spam
+				progressiveLoadingEnabled = false;
+				updateProgressiveLoadingStatus();
+			}
+		}
+			
+		// Function to stop progressive loading (useful for user interaction)
+		function stopProgressiveLoading() {
+			progressiveLoadingEnabled = false;
+			if (progressiveLoadingTimeout) {
+				clearTimeout(progressiveLoadingTimeout);
+				progressiveLoadingTimeout = null;
+			}
+			updateProgressiveLoadingStatus();
+		}
+		
+		// Function to resume progressive loading
+		function resumeProgressiveLoading() {
+			if (currentProgressivePage && !progressiveLoadingEnabled) {
+				progressiveLoadingEnabled = true;
+				loadNextBatchProgressively();
+			}
+			updateProgressiveLoadingStatus();
+		}
+		
+		// Function to update the progressive loading status display
+		function updateProgressiveLoadingStatus() {
+			const statusText = document.getElementById('progressive-status-text');
+			const toggleButton = document.getElementById('progressive-toggle');
+			
+			if (statusText && toggleButton) {
+				if (!currentProgressivePage) {
+					// All POIs loaded
+					statusText.textContent = 'All POIs loaded';
+					toggleButton.style.display = 'none';
+				} else if (progressiveLoadingEnabled) {
+					statusText.textContent = 'Loading more POIs in background...';
+					toggleButton.textContent = 'Pause';
+				} else {
+					statusText.textContent = 'Background loading paused';
+					toggleButton.textContent = 'Resume';
+				}
+			}
+		}
+		
+		// Set up event handlers when document is ready
+		function setupProgressiveLoadingControls() {
+			const toggleButton = document.getElementById('progressive-toggle');
+			if (toggleButton) {
+				toggleButton.addEventListener('click', function() {
+					if (progressiveLoadingEnabled) {
+						stopProgressiveLoading();
+					} else {
+						resumeProgressiveLoading();
+					}
+				});
+			}
+		}
+
+		// Set up Add Points controls
+		function setupAddPointsControls() {
+			// Create Add Points button
+			const addPointsBtn = document.createElement('button');
+			addPointsBtn.innerHTML = 'Add Points';
+			addPointsBtn.className = 'usa-button';
+			addPointsBtn.id = 'add-points-btn';
+			addPointsBtn.style.cssText = 'position: absolute; top: 60px; left: 10px; z-index: 1000; background-color: #4CAF50; color: white;';
+
+			// Add button to the map container
+			document.getElementById('gdal-map').appendChild(addPointsBtn);
+
+			// Variable to track if add points mode is active
+			let addPointsModeActive = false;
+			let draw;
+			let pendingPoints = []; // Store points before they are saved
+
+			// Create draw interaction for points
+			function createDrawInteraction() {
+				const vectorSource = vectorLayer.getSource();
+				
+				draw = new ol.interaction.Draw({
+					source: vectorSource,
+					type: 'Point'
+				});
+				
+				// When a point is drawn, add it to the vector source
+				draw.on('drawend', function(evt) {
+					const feature = evt.feature;
+					const coordinates = feature.getGeometry().getCoordinates();
+					const lonLat = ol.proj.toLonLat(coordinates);
+					
+					// Generate temporary ID for the new point
+					const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+					
+					feature.set('name', 'New Point');
+					feature.set('poiId', tempId);
+					feature.set('isNewPoint', true);
+					feature.set('longitude', lonLat[0]);
+					feature.set('latitude', lonLat[1]);
+					
+					// Style the new point with a distinctive look
+					feature.setStyle(new ol.style.Style({
+						image: new ol.style.Circle({
+							radius: 7,
+							fill: new ol.style.Fill({color: '#ff4444'}),
+							stroke: new ol.style.Stroke({color: 'white', width: 2})
+						}),
+						text: new ol.style.Text({
+							text: 'NEW',
+							fill: new ol.style.Fill({ color: '#ff4444' }),
+							stroke: new ol.style.Stroke({ color: '#000', width: 2 }),
+							font: 'bold 10px Arial',
+							offsetY: -40
+						})
+					}));
+					
+					// Add to pending points array
+					pendingPoints.push({
+						tempId: tempId,
+						longitude: lonLat[0],
+						latitude: lonLat[1],
+						feature: feature
+					});
+					
+					// Update the Add Points button to show count
+					updateAddPointsButton();
+				});
+				
+				return draw;
+			}
+
+			// Toggle add points mode
+			function toggleAddPointsMode() {
+				if (addPointsModeActive) {
+					// Disable add points mode
+					if (draw) {
+						gdalMap.removeInteraction(draw);
+					}
+					addPointsBtn.innerHTML = pendingPoints.length > 0 ? `Add Points (${pendingPoints.length} pending)` : 'Add Points';
+					addPointsBtn.style.backgroundColor = '#4CAF50';
+					addPointsModeActive = false;
+					isAddPointsMode = false; // Update global variable
+				} else {
+					// Enable add points mode
+					draw = createDrawInteraction();
+					gdalMap.addInteraction(draw);
+					addPointsBtn.innerHTML = 'Exit Add Mode';
+					addPointsBtn.style.backgroundColor = '#f44336';
+					addPointsModeActive = true;
+					isAddPointsMode = true; // Update global variable
+				}
+			}
+
+			// Update Add Points button text
+			function updateAddPointsButton() {
+				if (pendingPoints.length > 0 && !addPointsModeActive) {
+					addPointsBtn.innerHTML = `Add Points (${pendingPoints.length} pending)`;
+				}
+			}
+
+			// Save pending points to the server
+			async function savePendingPoints() {
+				if (pendingPoints.length === 0) {
+					showNotification('No points to save.', 'warning');
+					return;
+				}
+
+				const pointData = pendingPoints.map(point => ({
+					longitude: point.longitude,
+					latitude: point.latitude,
+					geometry: {
+						type: "Point",
+						coordinates: [point.longitude, point.latitude]
+					}
+				}));
+
+				// Get the CSRF token
+				const csrfToken = document.querySelector('input[name="csrfmiddlewaretoken"]').value;
+
+				// Prepare form data for submission
+				const formData = new FormData();
+				formData.append('points', JSON.stringify(pointData.map(point => ({
+					geometry: point.geometry,
+					vendor_id: "{{ vendor_id }}",
+					project_id: "{{ project_id }}"
+				}))));
+
+				try {
+					const response = await fetch(`/project/{{ project_id }}/poi/create/`, {
+						method: 'POST',
+						headers: {
+							'X-CSRFToken': csrfToken
+						},
+						body: formData
+					});
+
+					if (!response.ok) {
+						throw new Error(`Server error: ${response.status} ${response.statusText}`);
+					}
+
+					const data = await response.json();
+					
+					// Update the points with real IDs and add them to the system
+					if (data.points && Array.isArray(data.points)) {
+						const vectorSource = vectorLayer.getSource();
+						
+						data.points.forEach((savedPoi, index) => {
+							const pendingPoint = pendingPoints[index];
+							if (pendingPoint && pendingPoint.feature) {
+								// Update the feature with real data
+								pendingPoint.feature.set('poiId', savedPoi.id);
+								pendingPoint.feature.set('isNewPoint', false);
+								pendingPoint.feature.set('catalogId', savedPoi.catalog_id);
+								
+								// Re-style the point as a normal POI
+								const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ffa500', '#800080'];
+								const globalIndex = allPoisData.length + index;
+								const color = colors[globalIndex % colors.length];
+								
+								pendingPoint.feature.setStyle(new ol.style.Style({
+									image: new ol.style.Circle({
+                    fill: new ol.style.Fill({ color: 'rgba(0,0,0,0)' }),
+										stroke: new ol.style.Stroke({ 
+											color: color,
+											width: 3,
+											lineDash: [3, 3]
+										}),
+										radius: 32
+									}),
+									text: new ol.style.Text({
+										text: savedPoi.id.toString(),
+										fill: new ol.style.Fill({ color: color }),
+										stroke: new ol.style.Stroke({ color: '#000', width: 2 }),
+										font: 'bold 14px Arial',
+										offsetY: -40
+									})
+								}));
+								
+								// Add to allPoisData for tracking
+								allPoisData.push({
+									id: savedPoi.id,
+									longitude: pendingPoint.longitude,
+									latitude: pendingPoint.latitude,
+									catalog_id: savedPoi.catalog_id,
+									vendor_id: "{{ vendor_id }}"
+								});
+								
+								// Add POI to table
+								addPOIsToTable([{
+									id: savedPoi.id,
+									catalog_id: savedPoi.catalog_id
+								}]);
+							}
+						});
+						
+						// Clear pending points
+						pendingPoints = [];
+						addPointsBtn.innerHTML = 'Add Points';
+						
+						showNotification(`Successfully saved ${data.points.length} new points!`, 'success');
+					}
+				} catch (error) {
+					console.error('Error saving points:', error);
+					showNotification('Failed to save points: ' + error.message, 'error');
+				}
+			}
+
+			// Button click handler
+			addPointsBtn.addEventListener('click', function() {
+				if (pendingPoints.length > 0 && !addPointsModeActive) {
+					// If there are pending points and not in add mode, save them
+					savePendingPoints();
+				} else {
+					// Toggle add points mode
+					toggleAddPointsMode();
+				}
+			});
+		}
+
+		// Function to add POIs to the map
+		function addPOIsToMap(newPOIs) {
+			if (!vectorLayer) return;
+			
+			const vectorSource = vectorLayer.getSource();
+			const existingFeatureIds = new Set();
+			
+			// Get existing feature IDs to avoid duplicates
+			vectorSource.getFeatures().forEach(feature => {
+				existingFeatureIds.add(feature.get('poiId'));
+			});
+			
+			// Create features for new POIs
+			const newFeatures = [];
+			const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ffa500', '#800080'];
+			
+			newPOIs.forEach((poi, index) => {
+				if (!existingFeatureIds.has(poi.id)) {
+					// Calculate the global index for this POI in the full dataset
+					const globalIndex = allPoisData.length + index;
+					const color = colors[globalIndex % colors.length];
+					
+					const feature = new ol.Feature({
+						geometry: new ol.geom.Point(ol.proj.fromLonLat([poi.longitude, poi.latitude])),
+						name: `POI ${poi.id}`,
+						poiId: poi.id,
+						catalogId: poi.catalog_id,
+						finalClassification: poi.final_classification,
+						finalSpecies: poi.final_species,
+						annotated: false // Initialize as not annotated
+					});
+					
+					// Set style with proper color for the new feature
+					feature.setStyle(new ol.style.Style({
+						image: new ol.style.Circle({
+              fill: new ol.style.Fill({ color: 'rgba(0,0,0,0)' }),
+							stroke: new ol.style.Stroke({ 
+								color: color,
+								width: 3,
+								lineDash: [3, 3] // Creates a dotted line pattern
+							}),
+							radius: 32
+						}),
+						text: new ol.style.Text({
+							text: poi.id.toString(),
+							fill: new ol.style.Fill({ color: color }),
+							stroke: new ol.style.Stroke({ color: '#000', width: 2 }),
+							font: 'bold 14px Arial',
+							offsetY: -40
+						})
+					}));
+					
+					newFeatures.push(feature);
+				}
+			});
+			
+			// Add new features to the map
+			vectorSource.addFeatures(newFeatures);
+		}
+
+		// Function to add POIs to the table
+		function addPOIsToTable(newPOIs) {
+			const tbody = document.getElementById('selected-pois-table');
+			if (!tbody) return;
+			
+			newPOIs.forEach(poi => {
+				// Check if row already exists
+				const existingRow = document.querySelector(`tr[data-poi-id="${poi.id}"].poi-table-row`);
+				if (!existingRow) {
+					// Create new table row
+					const row = document.createElement('tr');
+					row.setAttribute('data-poi-id', poi.id);
+					row.className = 'poi-table-row';
+					row.style.display = 'none'; // Initially hidden
+					
+					row.innerHTML = `
+						<td data-label="POI ID"><a href="/project/{{ project_id }}/annotation/${poi.id}/">${poi.id}</a></td>
+						<td data-label="Status">
+							<span class="usa-tag">Pending</span>
+						</td>
+					`;
+					
+					tbody.appendChild(row);
+				}
+			});
+		}
+
+		// Global function to update POI selection styling
+		function updateFeatureStyle(feature, selected) {
+			const poiId = feature.get('poiId');
+			const isAnnotated = feature.get('annotated');
+			
+			// If the POI has been annotated, don't allow selection and keep submitted styling
+			if (isAnnotated === true) {
+				updateFeatureStyleForSubmitted(feature);
+				return;
+			}
+			
+			const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ffa500', '#800080'];
+			
+			// Find the index of this POI in the allPoisData array
+			let index = allPoisData.findIndex(poi => poi.id == poiId);
+			
+			// If not found in allPoisData (shouldn't happen, but fallback), use a hash-based approach
+			if (index === -1) {
+				// Use POI ID to determine color consistently
+				index = parseInt(poiId) % colors.length;
+			}
+			
+			const baseColor = colors[index % colors.length];
+			
+			feature.setStyle(new ol.style.Style({
+				image: new ol.style.Circle({
+          fill: new ol.style.Fill({ color: 'rgba(0,0,0,0)' }),
+					stroke: new ol.style.Stroke({ 
+						color: selected ? '#ffff00' : baseColor,
+						width: selected ? 4 : 3,
+						lineDash: [3, 3]
+					}),
+					radius: selected ? 36 : 32
+				}),
+				text: new ol.style.Text({
+					text: poiId.toString(),
+					fill: new ol.style.Fill({ color: selected ? '#000' : baseColor }),
+					stroke: new ol.style.Stroke({ color: selected ? '#fff' : '#000', width: 2 }),
+					font: selected ? 'bold 16px Arial' : 'bold 14px Arial',
+					offsetY: selected ? -42 : -40
+				})
+			}));
+		}
+
+		function initializeMaps() {
+			// Re-initialize the maps based on the provided latitude, longitude, and COG URL
+			// Create features for all POIs
+			const features = [];
+			
+			allPoisData.forEach((poi, index) => {
+				const feature = new ol.Feature({
+					geometry: new ol.geom.Point(ol.proj.fromLonLat([poi.longitude, poi.latitude])),
+					name: `POI ${poi.id}`,
+					poiId: poi.id,
+					catalogId: poi.catalog_id,
+					finalClassification: poi.final_classification,
+					finalSpecies: poi.final_species,
+					annotated: false // Initialize as not annotated
+				});
+				
+				// Set different colors for different POIs
+				const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ffa500', '#800080'];
+				const color = colors[index % colors.length];
+				
+				feature.setStyle(new ol.style.Style({
+					image: new ol.style.Circle({
+            fill: new ol.style.Fill({ color: 'rgba(0,0,0,0)' }),
+						stroke: new ol.style.Stroke({ 
+							color: color,
+							width: 3,
+							lineDash: [3, 3] // Creates a dotted line pattern
+						}),
+						radius: 32
+					}),
+					text: new ol.style.Text({
+						text: poi.id.toString(),
+						fill: new ol.style.Fill({ color: color }),
+						stroke: new ol.style.Stroke({ color: '#000', width: 2 }),
+						font: 'bold 14px Arial',
+						offsetY: -40
+					})
+				}));
+				
+				features.push(feature);
+			});
+
+      const cogSource = new ol.source.GeoTIFF({
+        sources: [{
+          url: new URL(cogUrl, window.location.origin).toString()
+        }]
+      });
+			const baseLayer = new ol.layer.Tile({ source: new ol.source.OSM() });
+			const vectorSource = new ol.source.Vector({ features: features });
+      vectorLayer = new ol.layer.Vector({
+        source: vectorSource
+			});
+
+
+			const variables = {
+				exposure: 0,
+				contrast: 0,
+				saturation: 0,
+			};
+
+        // Initialize the COG image layer
+        const cogLayer = new ol.layer.WebGLTile({
+			style: {
+				exposure: ['var', 'exposure'],
+				contrast: ['var', 'contrast'],
+				saturation: ['var', 'saturation'],
+				variables: variables,
+			},
+			source: cogSource,
+			attributions: 'GAIA',
+		});
+
+		// Load saved settings and initialize controls
+		window.ImageAdjustmentPersistence.initializeControls(variables, cogLayer);
+		
+		// Setup event listeners for persistence
+		window.ImageAdjustmentPersistence.setupEventListeners(cogLayer);
+
+    // Assign to global variables instead of declaring local ones with const
+    osmMap = new ol.Map({
+      target: 'osm-map',
+      layers: [baseLayer, vectorLayer],
+      view: new ol.View({
+        center: ol.proj.fromLonLat([longitude, latitude]),
+        zoom: 18,
+      }),
+    });
+
+    gdalMap = new ol.Map({
+      target: 'gdal-map',
+      layers: [baseLayer, cogLayer, vectorLayer],
+      view: osmMap.getView(),
+    });
+
+		const scaleLineControl = new ol.control.ScaleLine();
+		gdalMap.addControl(scaleLineControl)
+		
+		// Add POI circle scale indicator
+		const scaleIndicator = document.createElement('div');
+		scaleIndicator.id = 'poi-scale-indicator';
+		document.getElementById('gdal-map').appendChild(scaleIndicator);
+		
+		// Function to update POI scale indicator
+		function updatePOIScaleIndicator() {
+			const zoom = gdalMap.getView().getZoom();
+			const resolution = gdalMap.getView().getResolution();
+			
+			// POI circles have a radius of 32 pixels (normal) or 36 pixels (selected)
+			const circleRadiusPixels = 32;
+			
+			// Calculate the real-world distance represented by the circle radius
+			const circleRadiusMeters = circleRadiusPixels * resolution;
+			
+			let displayText;
+			if (circleRadiusMeters >= 1000) {
+				displayText = `POI Circle: ~${(circleRadiusMeters * 2 / 1000).toFixed(2)} km diameter`;
+			} else if (circleRadiusMeters >= 1) {
+				displayText = `POI Circle: ~${(circleRadiusMeters*2).toFixed(1)} m diameter`;
+			} else {
+				displayText = `POI Circle: ~${(circleRadiusMeters * 100*2).toFixed(1)} cm diameter`;
+			}
+			
+			// Add zoom level for reference
+			displayText += ` (Zoom: ${zoom.toFixed(1)})`;
+			
+			scaleIndicator.textContent = displayText;
+			
+			// Add color coding based on scale
+			if (circleRadiusMeters > 100) {
+				scaleIndicator.style.borderLeftColor = '#ff6b6b'; // Red for large scale
+			} else if (circleRadiusMeters > 10) {
+				scaleIndicator.style.borderLeftColor = '#ffa726'; // Orange for medium scale
+			} else {
+				scaleIndicator.style.borderLeftColor = '#66bb6a'; // Green for small scale
+			}
+		}
+		
+		// Update scale indicator when zoom changes
+		gdalMap.getView().on('change:resolution', updatePOIScaleIndicator);
+		
+		// Initial update
+		updatePOIScaleIndicator();
+
+        document.querySelectorAll('input[name="layer"]').forEach((input) => {
+        	input.addEventListener('change', (event) => {
+        		const value = event.target.value;
+        		baseLayer.setVisible(value === 'street');
+        		cogLayer.setVisible(value === 'satellite');
+        	});
+        });
+        document.querySelector('input[name="pointer"]').addEventListener('change', (event) => {
+          vectorLayer.setVisible(event.target.checked);
+        });
+        
+        // Add area selection functionality
+        const boxSelectInteraction = new ol.interaction.DragBox({
+          condition: ol.events.condition.platformModifierKeyOnly
+        });
+        
+        // Add the box select interaction to the map
+        gdalMap.addInteraction(boxSelectInteraction);
+        
+        // Handle box selection start
+        boxSelectInteraction.on('boxstart', function() {
+          // Add visual feedback when starting box selection
+          const mapElement = document.getElementById('gdal-map');
+          mapElement.style.cursor = 'crosshair';
+        });
+        
+        // Handle box selection
+        boxSelectInteraction.on('boxend', function() {
+          // Don't handle area selection when in add points mode
+          if (isAddPointsMode) {
+            return;
+          }
+          
+          const extent = boxSelectInteraction.getGeometry().getExtent();
+          const selectedFeatures = [];
+          let hasNewPoints = false;
+          
+          vectorLayer.getSource().forEachFeatureInExtent(extent, function(feature) {
+            // Only include non-annotated features and non-annotated view features in selection
+            if (feature.get('annotated') !== true && feature.get('isAnnotatedView') !== true) {
+              // Check if this is a new unsaved point
+              if (feature.get('isNewPoint') === true) {
+                hasNewPoints = true;
+                return; // Skip new points
+              }
+              selectedFeatures.push(feature);
+            }
+          });
+          
+          // Show warning if new points were in the selection area
+          if (hasNewPoints) {
+            showNotification('New unsaved points cannot be selected. Please save them first.', 'warning');
+          }
+          
+          // Toggle selection for all non-annotated features in the box
+          selectedFeatures.forEach(function(feature) {
+            const poiId = feature.get('poiId');
+            
+            // Toggle POI selection
+            if (selectedPOIs.has(poiId)) {
+              selectedPOIs.delete(poiId);
+              updateFeatureStyle(feature, false);
+            } else {
+              selectedPOIs.add(poiId);
+              updateFeatureStyle(feature, true);
+            }
+          });
+          
+          updatePOISelection();
+          
+          // Reset cursor
+          const mapElement = document.getElementById('gdal-map');
+          mapElement.style.cursor = '';
+        });
+        
+        // Add click handler to show POI information and toggle selection
+        gdalMap.on('click', function(evt) {
+          // Don't handle POI selection when in add points mode
+          if (isAddPointsMode) {
+            return;
+          }
+          
+          // Only handle individual clicks when not in area select mode
+          if (!evt.originalEvent.ctrlKey && !evt.originalEvent.metaKey) {
+            const feature = gdalMap.forEachFeatureAtPixel(evt.pixel, function(feature) {
+              return feature;
+            });
+            
+            if (feature) {
+              const poiId = feature.get('poiId');
+              const isAnnotated = feature.get('annotated');
+              const isAnnotatedView = feature.get('isAnnotatedView');
+              const isNewPoint = feature.get('isNewPoint');
+              
+              // Don't allow selection of already annotated POIs or POIs from annotated view
+              if (isAnnotated === true || isAnnotatedView === true) {
+                return;
+              }
+              
+              // Handle new unsaved points
+              if (isNewPoint === true) {
+                showNotification('Please save new points before selecting them for annotation.', 'warning');
+                return;
+              }
+              
+              // Toggle POI selection
+              if (selectedPOIs.has(poiId)) {
+                selectedPOIs.delete(poiId);
+                updateFeatureStyle(feature, false);
+              } else {
+                selectedPOIs.add(poiId);
+                updateFeatureStyle(feature, true);
+              }
+              
+              updatePOISelection();
+            }
+          }
+        });
+        
+        // Add hover effect for POIs
+        gdalMap.on('pointermove', function(evt) {
+          const feature = gdalMap.forEachFeatureAtPixel(evt.pixel, function(feature) {
+            return feature;
+          });
+          
+          if (feature) {
+            const isAnnotated = feature.get('annotated');
+            const isAnnotatedView = feature.get('isAnnotatedView');
+            const isNewPoint = feature.get('isNewPoint');
+            // Show different cursor for annotated vs selectable POIs vs new points
+            if (isAnnotated === true || isAnnotatedView === true) {
+              gdalMap.getViewport().style.cursor = 'not-allowed';
+            } else if (isNewPoint === true) {
+              gdalMap.getViewport().style.cursor = 'help'; // Different cursor for new points
+            } else {
+              gdalMap.getViewport().style.cursor = 'pointer';
+            }
+          } else {
+            gdalMap.getViewport().style.cursor = '';
+          }
+        });
+        
+      // Add context menu for coordinate copying
+      const contextMenuContainer = document.createElement('div');
+      contextMenuContainer.className = 'ol-contextmenu';
+      contextMenuContainer.style.cssText = 'position: absolute; background: white; border: 1px solid #ccc; padding: 5px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); display: none; z-index: 1000;';
+      document.body.appendChild(contextMenuContainer);
+
+      let clickedCoordinate = null;
+
+      // Function to show context menu with coordinate copying option
+      function showContextMenu(coordinate, pixel) {
+        clickedCoordinate = coordinate;
+        const lonLat = ol.proj.toLonLat(coordinate);
+        
+        const formattedLon = lonLat[0].toFixed(6);
+        const formattedLat = lonLat[1].toFixed(6);
+        
+        contextMenuContainer.innerHTML = `
+          <div style="cursor: pointer; padding: 8px;" id="copy-coordinates">
+            Copy coordinates: ${formattedLon}, ${formattedLat}
+          </div>
+        `;
+        
+        contextMenuContainer.style.left = `${pixel[0]}px`;
+        contextMenuContainer.style.top = `${pixel[1]}px`;
+        contextMenuContainer.style.display = 'block';
+        
+        document.getElementById('copy-coordinates').addEventListener('click', function() {
+          const coordText = `${formattedLon},${formattedLat}`;
+          navigator.clipboard.writeText(coordText)
+            .then(() => {
+              const successMsg = document.createElement('div');
+              successMsg.textContent = 'Coordinates copied!';
+              successMsg.style.cssText = 'position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #4CAF50; color: white; padding: 10px; border-radius: 4px; z-index: 2000;';
+              document.body.appendChild(successMsg);
+              
+              setTimeout(() => {
+                document.body.removeChild(successMsg);
+              }, 2000);
+              
+              contextMenuContainer.style.display = 'none';
+            })
+            .catch(err => {
+              console.error('Failed to copy coordinates: ', err);
+            });
+        });
+      }
+
+      // Add right-click event handler to the map
+      gdalMap.getViewport().addEventListener('contextmenu', function (evt) {
+        evt.preventDefault();
+        
+        const pixel = [evt.clientX, evt.clientY];
+        const coordinate = gdalMap.getCoordinateFromPixel(pixel);
+        
+        showContextMenu(coordinate, pixel);
+      });
+
+      // Hide context menu when clicking elsewhere
+      document.addEventListener('click', function(evt) {
+        if (evt.target.closest('.ol-contextmenu') === null) {
+          contextMenuContainer.style.display = 'none';
+        }
+      });
+
+      // Hide context menu when dragging the map
+      gdalMap.on('pointerdrag', function() {
+        contextMenuContainer.style.display = 'none';
+      });
+      
+      // Initialize POI selection functionality
+      initializePOISelection();
+      
+      // Add direct event listener for Load Next POIs button
+      const loadButton = document.getElementById('load-next-pois');
+      if (loadButton) {
+        loadButton.addEventListener('click', function(e) {
+          e.preventDefault();
+          
+          const nextPage = this.dataset.nextPage;
+          const vendorId = this.dataset.vendorId;
+          const projectId = this.dataset.projectId;
+          
+          if (nextPage && vendorId && projectId) {
+            loadMorePOIs(nextPage, vendorId, projectId);
+          } else {
+            console.error('Missing button data attributes in direct listener');
+          }
+        });
+      }
+      
+      // Add keyboard event listeners for area selection mode feedback
+      let isModifierPressed = false;
+      
+      document.addEventListener('keydown', function(evt) {
+        if ((evt.ctrlKey || evt.metaKey) && !isModifierPressed) {
+          isModifierPressed = true;
+          const mapElement = document.getElementById('gdal-map');
+          mapElement.style.cursor = 'crosshair';
+        }
+      });
+      
+      document.addEventListener('keyup', function(evt) {
+        if (!(evt.ctrlKey || evt.metaKey) && isModifierPressed) {
+          isModifierPressed = false;
+          const mapElement = document.getElementById('gdal-map');
+          mapElement.style.cursor = '';
+        }
+      });
+    }
+    
+    // Function to handle POI selection logic
+    function initializePOISelection() {
+      // Store original feature styles
+      window.originalFeatureStyles = new Map();
+      
+      // Get all features and store their original styles
+      const vectorSource = gdalMap.getLayers().getArray().find(layer => 
+        layer instanceof ol.layer.Vector
+      ).getSource();
+      
+      vectorSource.getFeatures().forEach(feature => {
+        window.originalFeatureStyles.set(feature.get('poiId'), feature.getStyle());
+      });
+      
+      // Initial table update - but start with no POIs selected
+      updateSelectedPOIsTable();
+    }
+    
+    // Function to update POI selection count and button state
+    function updatePOISelection() {
+      const count = selectedPOIs.size;
+      
+      document.getElementById('selected-count').textContent = count;
+      
+      // Update submit button state based on selection and classification
+      updateSubmitButtonState();
+      
+      // Update table display based on selection
+      updateSelectedPOIsTable();
+    }
+    
+    // Function to update the selected POIs table display
+    function updateSelectedPOIsTable() {
+      const noSelectionMessage = document.getElementById('no-selection-message');
+      const poiRows = document.querySelectorAll('.poi-table-row');
+      
+      // Hide all POI rows first
+      poiRows.forEach(row => {
+        row.style.display = 'none';
+      });
+      
+      if (selectedPOIs.size === 0) {
+        // Show "no selection" message when nothing is selected
+        noSelectionMessage.style.display = 'table-row';
+      } else {
+        // Hide "no selection" message and show selected POI rows
+        noSelectionMessage.style.display = 'none';
+        
+        selectedPOIs.forEach(poiId => {
+          const row = document.querySelector(`tr[data-poi-id="${poiId}"].poi-table-row`);
+          if (row) {
+            row.style.display = 'table-row';
+          }
+        });
+      }
+    }
+
+    // Function to submit form via AJAX
+    async function submitFormAjax(form) {
+      const formData = new FormData();
+      
+      // Add CSRF token
+      const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]').value;
+      formData.append('csrfmiddlewaretoken', csrfToken);
+      
+      // Add selected POIs
+      selectedPOIs.forEach(poiId => {
+        formData.append('selected_pois', poiId);
+      });
+      
+      // Add classification
+      const selectedClassification = document.querySelector("#classification-buttongroup button.usa-button--active");
+      if (selectedClassification) {
+        formData.append('classification', selectedClassification.dataset.value);
+      }
+      
+      // Add target (species) if selected
+      const selectedTarget = document.querySelector('#species-div input[type="radio"]:checked');
+      if (selectedTarget) {
+        formData.append('target', selectedTarget.value);
+      }
+      
+      // Add confidence if selected
+      const selectedConfidence = document.querySelector('#confidence-div input[type="radio"]:checked');
+      if (selectedConfidence) {
+        formData.append('confidence', selectedConfidence.value);
+      }
+
+      // Add age if selected
+      const selectedAge = document.querySelector('#age-div input[type="radio"]:checked');
+      if (selectedAge) {
+        formData.append('age', selectedAge.value);
+      }
+      
+      // Add comments
+      const commentsField = form.querySelector('#id_comments');
+      if (commentsField) {
+        formData.append('comments', commentsField.value);
+      }
+      
+      // Add user and form type
+      formData.append('user', '{{ user.id }}');
+      formData.append('form_type', 'form');
+      
+      // Submit via fetch
+      const response = await fetch(window.location.href, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest' // Mark as AJAX request
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        // Show success message
+        const submittedCount = selectedPOIs.size;
+        showNotification(`${submittedCount} annotation${submittedCount > 1 ? 's' : ''} saved successfully!`, 'success');
+        
+        // Store the submitted POI IDs before clearing the set
+        const submittedPOIIds = new Set(selectedPOIs);
+        
+        // Clear selected POIs and reset form
+        selectedPOIs.clear();
+        updatePOISelection();
+        
+        // Reset classification buttons
+        document.querySelectorAll("#classification-buttongroup button").forEach(btn => {
+          btn.classList.remove("usa-button--active");
+          btn.classList.add("usa-button--outline");
+        });
+        
+        // Hide species and confidence sections
+        document.getElementById('species-div').style.display = 'none';
+        document.getElementById('confidence-div').style.display = 'none';
+        
+        // Clear form fields
+        form.reset();
+        
+        // Update map features to show they are no longer selectable (pass the submitted POI IDs)
+        refreshMapFeatures(submittedPOIIds);
+        
+        // Update the selection count display after clearing
+        updatePOISelection();
+        
+      } else {
+        throw new Error(result.error || 'Unknown error occurred');
+      }
+    }
+    
+    // Function to show notification messages
+    function showNotification(message, type = 'info') {
+      // Remove any existing notifications
+      const existingNotifications = document.querySelectorAll('.ajax-notification');
+      existingNotifications.forEach(n => n.remove());
+      
+      // Create notification element
+      const notification = document.createElement('div');
+      notification.className = `usa-alert usa-alert--${type} ajax-notification`;
+      notification.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 10000; width: 300px;';
+      notification.innerHTML = `
+        <div class="usa-alert__body">
+          <p class="usa-alert__text">${message}</p>
+        </div>
+      `;
+      
+      document.body.appendChild(notification);
+      
+      // Auto-remove after 5 seconds
+      setTimeout(() => {
+        if (notification.parentNode) {
+          notification.parentNode.removeChild(notification);
+        }
+      }, 5000);
+    }
+    
+    // Function to refresh map features after annotation
+    function refreshMapFeatures(submittedPOIIds) {
+      // Update annotated POIs status and styling without removing them from the map
+      if (vectorLayer && submittedPOIIds && submittedPOIIds.size > 0) {
+        const vectorSource = vectorLayer.getSource();
+        const features = vectorSource.getFeatures();
+        let updatedCount = 0;
+        
+        features.forEach(feature => {
+          const poiId = feature.get('poiId');
+          if (submittedPOIIds.has(poiId)) {
+            // Update the feature to show it's been annotated
+            feature.set('annotated', true);
+            
+            // Update the visual style to indicate it's been submitted
+            updateFeatureStyleForSubmitted(feature);
+            updatedCount++;
+            
+            // Update the status in the table
+            updatePOITableStatus(poiId, 'Submitted');
+          }
+        });
+        
+        // Update POI count display to show submitted vs pending
+        updatePOICountDisplay();
+        
+        // Ensure selection count is updated properly
+        updatePOISelection();
+      } else {
+        console.log('refreshMapFeatures called but no submitted POI IDs provided or empty set');
+      }
+    }
+    
+    // Function to update feature style for submitted POIs
+    function updateFeatureStyleForSubmitted(feature) {
+      const poiId = feature.get('poiId');
+      const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ffa500', '#800080'];
+      
+      // Find the index of this POI in the allPoisData array
+      let index = allPoisData.findIndex(poi => poi.id == poiId);
+      if (index === -1) {
+        index = parseInt(poiId) % colors.length;
+      }
+      
+      const baseColor = colors[index % colors.length];
+      
+      // Style for submitted POIs - make them more muted/grayed out
+      feature.setStyle(new ol.style.Style({
+        image: new ol.style.Circle({
+          fill: new ol.style.Fill({ color: 'rgba(0,0,0,0)' }),
+          stroke: new ol.style.Stroke({ 
+            color: '#808080', // Gray stroke
+            width: 2,
+            lineDash: [5, 5] // Different dash pattern
+          }),
+          radius: 28 // Slightly smaller radius
+        }),
+        text: new ol.style.Text({
+          text: `✓${poiId}`, // Add checkmark prefix
+          fill: new ol.style.Fill({ color: '#666666' }), // Gray text
+          stroke: new ol.style.Stroke({ color: '#ffffff', width: 2 }),
+          font: 'bold 12px Arial',
+          offsetY: -35
+        })
+      }));
+    }
+    
+    // Function to update POI status in the table
+    function updatePOITableStatus(poiId, status) {
+      const row = document.querySelector(`tr[data-poi-id="${poiId}"].poi-table-row`);
+      if (row) {
+        const statusCell = row.querySelector('td[data-label="Status"]');
+        if (statusCell) {
+          const statusClass = status === 'Submitted' ? 'usa-tag--success' : 'usa-tag';
+          statusCell.innerHTML = `<span class="usa-tag ${statusClass}">${status}</span>`;
+        }
+      }
+    }
+    
+    // Function to update the POI count display
+    function updatePOICountDisplay() {
+      if (!vectorLayer) return;
+      
+      const vectorSource = vectorLayer.getSource();
+      const features = vectorSource.getFeatures();
+      
+      let submittedCount = 0;
+      let pendingCount = 0;
+      
+      features.forEach(feature => {
+        if (feature.get('annotated') === true) {
+          submittedCount++;
+        } else {
+          pendingCount++;
+        }
+      });
+      
+      const totalCount = submittedCount + pendingCount;
+      
+      // Update the POI count display - use current selectedPOIs.size instead of old textContent
+      const selectedCountSpan = document.getElementById('selected-count');
+      if (selectedCountSpan) {
+        const poiCountParagraph = selectedCountSpan.closest('p');
+        if (poiCountParagraph) {
+          poiCountParagraph.innerHTML = `<strong>Total POI's:</strong> ${totalCount} (${submittedCount} submitted, ${pendingCount} pending) of ${totalPOICount}, <strong>Selected POI's:</strong> <span id="selected-count">${selectedPOIs.size}</span>`;
+        }
+      }
+    }
+
+    // Form submission handler
+    document.addEventListener("DOMContentLoaded", () => {
+      const form = document.querySelector("#multiview_annotation_form");
+      
+      if (form) {
+        form.addEventListener("submit", async (e) => {
+          e.preventDefault(); // Prevent default form submission
+          
+          if (selectedPOIs.size === 0) {
+            alert('Please select at least one POI to annotate.');
+            return;
+          }
+          
+          // Check if classification is selected
+          const selectedClassification = document.querySelector("#classification-buttongroup button.usa-button--active");
+          if (!selectedClassification) {
+            alert('Please select a classification.');
+            return;
+          }
+          
+          // Disable the submit button to prevent double submissions
+          const submitButton = document.querySelector("button[type='submit']");
+          const originalText = submitButton.textContent;
+          submitButton.disabled = true;
+          submitButton.textContent = 'Submitting...';
+          
+          try {
+            // Show confetti for animal classifications
+            const animalButton = document.querySelector("#classification-buttongroup button[data-value='14']");
+            if (animalButton && animalButton.classList.contains("usa-button--active")) {
+              confetti({
+                startVelocity: 50,
+                spread: 90,
+                particleCount: 50,
+                origin: { y: 0.4 }
+              });
+              
+              // Wait for confetti animation
+              await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+            
+            // Submit form via AJAX
+            await submitFormAjax(form);
+            
+          } catch (error) {
+            console.error('Form submission error:', error);
+            alert('Error submitting form: ' + error.message);
+          } finally {
+            // Re-enable the submit button
+            submitButton.disabled = false;
+            submitButton.textContent = originalText;
+          }
+        });
+      }
+      
+      // Add event listeners for species, confidence, and age radio buttons
+      document.querySelectorAll('#species-div input[type="radio"], #confidence-div input[type="radio"], #age-div input[type="radio"]').forEach(radio => {
+        radio.addEventListener('change', updateSubmitButtonState);
+      });
+      
+      // Add event listener for "Load Next POIs" button using event delegation
+      document.addEventListener('click', function(e) {
+        // Check for direct button click or click on button children
+        let button = null;
+        if (e.target.id === 'load-next-pois') {
+          button = e.target;
+        } else if (e.target.closest('#load-next-pois')) {
+          button = e.target.closest('#load-next-pois');
+        }
+        
+        if (button) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const nextPage = button.dataset.nextPage;
+          const vendorId = button.dataset.vendorId;
+          const projectId = button.dataset.projectId;
+          
+          if (nextPage && vendorId && projectId) {
+            loadMorePOIs(nextPage, vendorId, projectId);
+          } else {
+            console.error('Missing button data attributes');
+          }
+        }
+      });
+    });
+    </script>
+    
+    <!-- View Annotated Points Toggle Script -->
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+          const toggleButton = document.getElementById('view-annotated-toggle');
+          let showingAnnotatedPoints = false;
+          let annotatedPoisData = []; // Store annotated POIs data
+          
+          if (toggleButton) {
+            toggleButton.addEventListener('click', async function() {
+              if (!showingAnnotatedPoints) {
+                // Load and show annotated points
+                await loadAnnotatedPoints();
+                this.textContent = 'Hide Annotated Points';
+                showingAnnotatedPoints = true;
+              } else {
+                // Hide annotated points
+                hideAnnotatedPoints();
+                this.textContent = 'View Annotated Points';
+                showingAnnotatedPoints = false;
+              }
+            });
+          }
+          
+          async function loadAnnotatedPoints() {
+            try {
+              // Show loading state
+              toggleButton.disabled = true;
+              toggleButton.textContent = 'Loading...';
+              
+              // Fetch annotated POIs for this vendor ID
+              const response = await fetch(`/project/{{ project_id }}/multiview/{{ vendor_id }}/annotated/`, {
+                method: 'GET',
+                headers: {
+                  'X-Requested-With': 'XMLHttpRequest',
+                  'Content-Type': 'application/json',
+                },
+              });
+              
+              if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+              }
+              
+              const data = await response.json();
+              annotatedPoisData = data.annotated_pois || [];
+              
+              // Add annotated POIs to the map
+              addAnnotatedPoisToMap(annotatedPoisData);
+              
+              showNotification(`Loaded ${annotatedPoisData.length} annotated points`, 'success');
+              
+            } catch (error) {
+              console.error('Error loading annotated points:', error);
+              showNotification('Error loading annotated points', 'error');
+            } finally {
+              toggleButton.disabled = false;
+            }
+          }
+          
+          function addAnnotatedPoisToMap(annotatedPois) {
+            if (!vectorLayer || !annotatedPois.length) return;
+            
+            const vectorSource = vectorLayer.getSource();
+            const newFeatures = [];
+            
+            annotatedPois.forEach((poi, index) => {
+              const feature = new ol.Feature({
+                geometry: new ol.geom.Point(ol.proj.fromLonLat([poi.longitude, poi.latitude])),
+                name: `Annotated POI ${poi.id}`,
+                poiId: poi.id,
+                catalogId: poi.catalog_id,
+                finalClassification: poi.final_classification,
+                finalSpecies: poi.final_species,
+                annotated: true, // Mark as annotated
+                isAnnotatedView: true // Special flag for annotated view POIs
+              });
+              
+              // Style for annotated POIs - dotted circles, cannot be selected
+              const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ffa500', '#800080'];
+              const color = colors[index % colors.length];
+              
+              feature.setStyle(new ol.style.Style({
+                image: new ol.style.Circle({
+                  fill: new ol.style.Fill({ color: 'rgba(0,0,0,0)' }),
+                  stroke: new ol.style.Stroke({ 
+                    color: '#808080', // Gray color for annotated points
+                    width: 2,
+                    lineDash: [5, 5] // Dotted pattern
+                  }),
+                  radius: 28
+                }),
+                text: new ol.style.Text({
+                  text: `✓${poi.id}`, // Checkmark to indicate it's annotated
+                  fill: new ol.style.Fill({ color: '#666666' }),
+                  stroke: new ol.style.Stroke({ color: '#ffffff', width: 2 }),
+                  font: 'bold 12px Arial',
+                  offsetY: -35
+                })
+              }));
+              
+              newFeatures.push(feature);
+            });
+            
+            // Add new features to the map
+            vectorSource.addFeatures(newFeatures);
+          }
+          
+          function hideAnnotatedPoints() {
+            if (!vectorLayer) return;
+            
+            const vectorSource = vectorLayer.getSource();
+            const features = vectorSource.getFeatures();
+            
+            // Remove features marked as annotated view POIs
+            const featuresToRemove = features.filter(feature => feature.get('isAnnotatedView') === true);
+            featuresToRemove.forEach(feature => {
+              vectorSource.removeFeature(feature);
+            });
+            
+            annotatedPoisData = [];
+            showNotification('Annotated points hidden', 'info');
+          }
+          
+        });
+    </script>
+    
+    <!-- Form interaction scripts -->      <script>
+        document.addEventListener("DOMContentLoaded", () => {
+          const group = document.querySelector("#classification-buttongroup");
+          if (group) {
+            const allButtons = group.querySelectorAll("button");
+            
+            // Function to handle button visibility based on Animal selection
+            function handleAnimalButtonVisibility() {
+              const animalButton = group.querySelector("button[data-value='14']");
+              const submitButton = document.querySelector("button[type='submit']");
+              
+              if (animalButton && animalButton.classList.contains("usa-button--active")) {
+                // Show submit button and Animal-specific fields when Animal is selected
+                if (submitButton) {
+                  submitButton.style.display = 'block';
+                }
+                document.getElementById('species-div').style.display = 'block';
+                document.getElementById('confidence-div').style.display = 'block';
+                document.getElementById('age-div').style.display = 'block';
+
+                const ageRadios = document.querySelectorAll('#age-div input[type="radio"]');
+                const hasAgeSelection = Array.from(ageRadios).some(radio => radio.checked);
+                if (!hasAgeSelection) {
+                  const adultAgeRadio = document.querySelector('#age-div input[type="radio"][value="adult"]');
+                  if (adultAgeRadio) {
+                    adultAgeRadio.checked = true;
+                  }
+                }
+              } else {
+                // Hide submit button and Animal-specific fields for other classifications
+                if (submitButton) {
+                  submitButton.style.display = 'none';
+                }
+                document.getElementById('species-div').style.display = 'none';
+                document.getElementById('confidence-div').style.display = 'none';
+                document.getElementById('age-div').style.display = 'none';
+                // Clear selections
+                const speciesRadios = document.querySelectorAll('#species-div input[type="radio"]');
+                const confidenceRadios = document.querySelectorAll('#confidence-div input[type="radio"]');
+                const ageRadios = document.querySelectorAll('#age-div input[type="radio"]');
+                speciesRadios.forEach(radio => radio.checked = false);
+                confidenceRadios.forEach(radio => radio.checked = false);
+                ageRadios.forEach(radio => radio.checked = false);
+              }
+            }
+
+            // Add click event listeners to all buttons
+            allButtons.forEach((button) => {
+              button.addEventListener("click", function () {
+                // Don't allow clicks on disabled buttons
+                if (this.disabled) {
+                  return;
+                }
+                
+                const hiddenInput = group.nextElementSibling;
+
+                // Remove active class from all buttons
+                allButtons.forEach((btn) => {
+                  btn.classList.remove("usa-button--active");
+                });
+
+                // Add active class to the clicked button
+                this.classList.add("usa-button--active");
+
+                // Update the hidden input value
+                hiddenInput.value = this.getAttribute("data-value");
+
+                // Handle visibility based on Animal button selection
+                handleAnimalButtonVisibility();
+                
+                // Update submit button state
+                updateSubmitButtonState();
+              });
+            });
+          }
+        });
+      </script>
+    
+    <!-- Confetti for animal classifications -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  </div>
+</section>
+</body>
+{% include 'sections/footer.html' %}
+</html>

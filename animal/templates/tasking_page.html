@@ -1,0 +1,101 @@
+{% load static %}
+{% include 'sections/header.html' %}
+<section class="usa-section padding-top-0">
+    <div class="grid-container padding-bottom-1">
+        <h1>Areas of Interest</h1>
+    </div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    <div class="grid-row">
+        <div id="aoi-table" class="grid-col-4 grid-offset-1">
+            <div class="usa-table-container--scrollable margin-top-0" tabindex="0">
+                <table id="table" class="usa-table">
+                    <thead>
+                        <tr>
+                            <th data-sortable scope="col" role="columnheader">ID</th>
+                            <th data-sortable scope="col" role="columnheader">Name</th>
+                            <th data-sortable scope="col" role="columnheader">Requestor</th>
+                            <th data-sortable scope="col" role="columnheader">
+                                Area (Km<sup>2</sup>)
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for feature in aoi_data %}
+                            <tr data-id="{{ feature.id }}" data-geometry="{{ feature.geometry }}">
+                                <td>{{ feature.id }}</td>
+                                <td>{{ feature.name }}</td>
+                                <td>{{ feature.requestor }}</td>
+                                <td>{{ feature.sqkm }}</td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="3">No data available</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div id="map" class="map grid-col-6" style="height: 700px;"></div>
+        <script>
+				// Clear previous selections from the map and table
+				function clearPreviousSelection() {
+					geojsonLayer.eachLayer(function (layer) {
+						layer.setStyle({ color: 'cornflowerblue' });
+					});
+					
+					document.querySelectorAll('#table tbody tr').forEach(function (row) {
+						row.classList.remove('highlight');
+					});
+				}
+				
+				// Highlight selected area of interest
+				function highlightAOI(feature, layer) {
+					layer.setStyle({ color: 'pink'});
+					
+					var tableRow = document.querySelector('[data-id="' + feature.id + '"]');
+					if (tableRow) {
+						tableRow.classList.add('highlight');
+						tableRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+					}
+				}
+				
+				// Toggle highlighted AOI
+				function toggleHighlightedAOI(feature, layer) {
+					if (layer.options.color == 'pink') {
+						layer.setStyle({ color: 'cornflowerblue' });
+						document.querySelector('[data-id="' + feature.id + '"]').classList.remove('highlight');
+					} else {
+						clearPreviousSelection();
+						highlightAOI(feature, layer);
+					}
+				}
+			
+				// Initalize map
+				var map = L.map('map').setView([39.8283, -98.5795], 4);
+				L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+					attribution: '&copy; OpenStreetMap contributors'
+				}).addTo(map);
+				
+				// Load GeoJSON data
+				var aoiData = {{ geojson_aoi_data|safe }};
+				
+				// Select and deselect GeoJSON
+				var geojsonLayer = L.geoJSON(aoiData, {
+					style: function (feature) {
+						return { color: "cornflowerblue"};
+					},
+					onEachFeature: function (feature, layer) {
+						layer.on('click', function() {
+							toggleHighlightedAOI(feature, layer);
+						});
+					}
+				}).addTo(map);
+        </script>
+    </div>
+</section>
+</body>
+{% include 'sections/footer.html' %}
+</html>

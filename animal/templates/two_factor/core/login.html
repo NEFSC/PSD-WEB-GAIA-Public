@@ -1,0 +1,270 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block title %}GAIA Login{% endblock %}
+
+{% block content %}
+<div class="usa-section padding-top-4">
+  <div class="grid-container">
+    <div class="grid-row">
+      <div class="margin-bottom-2">
+        <img src="/static/gaia-logo.png" alt="GAIA Logo" class="usa-logo__img" width="25%">
+      </div>
+      <div class="grid-col-6 bg-white padding-y-3 padding-x-5 border border-base-lighter">
+        <h1 class="margin-bottom-0">Sign in</h1>
+        <form class="usa-form" method="POST">
+          {% csrf_token %}
+
+          <fieldset class="usa-fieldset">
+            {% if wizard %}
+              <!-- Two-factor authentication wizard -->
+              {{ wizard.management_form }}
+              
+              {% if wizard.steps.current == 'auth' %}
+                <!-- Step 1: Username and Password -->
+                {% for field in wizard.form %}
+                  <label class="usa-label" for="{{ field.id_for_label }}">
+                    {{ field.label }}
+                  </label>
+                  
+                  {% if field.field.widget.input_type == 'text' %}
+                    <input class="usa-input{% if field.errors %} usa-input--error{% endif %}" 
+                           type="text" 
+                           name="{{ field.html_name }}" 
+                           id="{{ field.id_for_label }}"
+                           value="{{ field.value|default:'' }}"
+                           autocomplete="username"
+                           {% if field.field.required %}required{% endif %}>
+                  {% elif field.field.widget.input_type == 'password' %}
+                    <div class="usa-input-group">
+                      <input class="usa-input{% if field.errors %} usa-input--error{% endif %}" 
+                             type="password" 
+                             name="{{ field.html_name }}" 
+                             id="{{ field.id_for_label }}"
+                             value="{{ field.value|default:'' }}"
+                             autocomplete="current-password"
+                             {% if field.field.required %}required{% endif %}>
+                      <button
+                        title="Toggle password visibility"
+                        type="button"
+                        class="usa-show-password"
+                        data-show-text="Show password"
+                        data-hide-text="Hide password"
+                        aria-controls="{{ field.id_for_label }}">
+                        Show password
+                      </button>
+                    </div>
+                  {% else %}
+                    {{ field }}
+                  {% endif %}
+                  
+                  {% if field.errors %}
+                    <div class="usa-alert usa-alert--error" role="alert">
+                      <div class="usa-alert__body">
+                        <p class="usa-alert__text" style="margin-left: 0;">
+                          {{ field.errors|join:", " }}
+                        </p>
+                      </div>
+                    </div>
+                  {% endif %}
+                {% endfor %}
+                
+              {% elif wizard.steps.current == 'token' %}
+                <!-- Step 2: Two-Factor Token -->
+                <p>{% trans "Please enter your authentication code:" %}</p>
+                {% for field in wizard.form %}
+                  {% if field.field.widget.input_type != 'checkbox' %}
+                    <label class="usa-label" for="{{ field.id_for_label }}">
+                      {{ field.label }}
+                    </label>
+                  {% endif %}
+                  
+                  {% if field.field.widget.input_type == 'text' or field.field.widget.input_type == 'number' %}
+                    <input class="usa-input{% if field.errors %} usa-input--error{% endif %}" 
+                           type="text" 
+                           name="{{ field.html_name }}" 
+                           id="{{ field.id_for_label }}"
+                           value="{{ field.value|default:'' }}"
+                           inputmode="numeric"
+                           pattern="[0-9]*"
+                           maxlength="6"
+                           placeholder="Enter 6-digit code"
+                           {% if field.field.required %}required{% endif %}>
+                  {% elif field.field.widget.input_type == 'checkbox' %}
+                    <div class="usa-checkbox margin-top-2">
+                      <input class="usa-checkbox__input" 
+                             type="checkbox" 
+                             name="{{ field.html_name }}" 
+                             id="{{ field.id_for_label }}"
+                             value="{{ field.field.widget.attrs.value|default:'on' }}"
+                             {% if field.value %}checked{% endif %}>
+                      <label class="usa-checkbox__label" for="{{ field.id_for_label }}">
+                        {{ field.label }}
+                      </label>
+                    </div>
+                  {% else %}
+                    {{ field }}
+                  {% endif %}
+                  
+                  {% if field.errors %}
+                    <div class="usa-alert usa-alert--error" role="alert">
+                      <div class="usa-alert__body">
+                        <p class="usa-alert__text" style="margin-left: 0;">
+                          {% for error in field.errors %}
+                            {% if "required" in error|lower %}
+                              Please enter the 6-digit verification code from your authenticator app.
+                            {% elif "invalid" in error|lower or "incorrect" in error|lower or "wrong" in error|lower %}
+                              The verification code is invalid or has expired. Please try a new code from your authenticator app.
+                            {% else %}
+                              {{ error }}
+                            {% endif %}
+                          {% endfor %}
+                        </p>
+                      </div>
+                    </div>
+                  {% endif %}
+                {% endfor %}
+                
+                <!-- Step 3: Backup Token -->
+              {% elif wizard.steps.current == 'backup' %}
+                <p>{% trans "Please enter a backup token:" %}</p>
+                {% for field in wizard.form %}
+                  <label class="usa-label" for="{{ field.id_for_label }}">
+                    {{ field.label }}
+                  </label>
+                  {{ field }}
+                  {% if field.errors %}
+                    <div class="usa-alert usa-alert--error" role="alert">
+                      <div class="usa-alert__body">
+                        <p class="usa-alert__text" style="margin-left: 0;">
+                          {{ field.errors|join:", " }}
+                        </p>
+                      </div>
+                    </div>
+                  {% endif %}
+                {% endfor %}
+              {% endif %}
+            {% else %}
+              <!-- Regular Django authentication form -->
+              <label class="usa-label" for="{{ form.username.id_for_label }}">
+                Username
+              </label>
+              <input class="usa-input{% if form.username.errors %} usa-input--error{% endif %}" 
+                     type="text" 
+                     name="username" 
+                     id="{{ form.username.id_for_label }}"
+                     value="{{ form.username.value|default:'' }}"
+                     autocomplete="username"
+                     required>
+              {% if form.username.errors %}
+                <div class="usa-alert usa-alert--error" role="alert">
+                  <div class="usa-alert__body">
+                    <p class="usa-alert__text" style="margin-left: 0;">
+                      {{ form.username.errors|join:", " }}
+                    </p>
+                  </div>
+                </div>
+              {% endif %}
+
+              <label class="usa-label" for="{{ form.password.id_for_label }}">
+                Password
+              </label>
+              <div class="usa-input-group">
+                <input
+                  class="usa-input{% if form.password.errors %} usa-input--error{% endif %}"
+                  id="{{ form.password.id_for_label }}"
+                  name="password"
+                  type="password"
+                  autocomplete="current-password"
+                  required
+                />
+                <button
+                  title="Toggle password"
+                  type="button"
+                  class="usa-show-password"
+                  data-show-text="Show password"
+                  data-hide-text="Hide password"
+                  aria-controls="{{ form.password.id_for_label }}">
+                  Show password
+                </button>
+              </div>
+              {% if form.password.errors %}
+                <div class="usa-alert usa-alert--error" role="alert">
+                  <div class="usa-alert__body">
+                    <p class="usa-alert__text" style="margin-left: 0;">
+                      {{ form.password.errors|join:", " }}
+                    </p>
+                  </div>
+                </div>
+              {% endif %}
+            {% endif %}
+
+            <input class="usa-button" type="submit" value="{% trans 'Sign in' %}" />
+
+            {% if wizard %}
+              {% if wizard.form.non_field_errors %}
+              <div class="usa-alert usa-alert--error" role="alert">
+                <div class="usa-alert__body">
+                  <p class="usa-alert__text" style="margin-left: 0;">
+                    {{ wizard.form.non_field_errors|join:", " }}
+                  </p>
+                </div>
+              </div>
+              {% endif %}
+
+              {% if wizard.steps.current == wizard.steps.step0  %}
+              <p>
+                <a href="../../accounts/password_reset" title="Forgot password">
+                  Forgot password?
+                </a>
+              </p>
+              {% endif %}
+              
+            {% else %}
+              {% if form.non_field_errors %}
+              <div class="usa-alert usa-alert--error" role="alert">
+                <div class="usa-alert__body">
+                  <p class="usa-alert__text" style="margin-left: 0;">
+                    {{ form.non_field_errors|join:", " }}
+                  </p>
+                </div>
+              </div>
+              {% endif %}
+
+              <p>
+                <a href="/accounts/password_reset" title="Forgot password">
+                  Forgot password?
+                </a>
+              </p>
+            {% endif %}
+          </fieldset>
+        </form>
+
+        {% if wizard %}
+          {% if wizard.steps.step0 == wizard.steps.current %}
+          <div class="usa-alert usa-alert--info margin-top-3" role="alert">
+            <div class="usa-alert__body">
+              <h4 class="usa-alert__heading">New to Two-Factor Authentication?</h4>
+              <p class="usa-alert__text">
+                After logging in for the first time, you'll be prompted to set up two-factor authentication 
+                for enhanced security. You'll need a smartphone with an authenticator app.
+              </p>
+            </div>
+          </div>
+          {% endif %}
+        {% else %}
+          <div class="usa-alert usa-alert--info margin-top-3" role="alert">
+            <div class="usa-alert__body">
+              <h4 class="usa-alert__heading">New to Two-Factor Authentication?</h4>
+              <p class="usa-alert__text">
+                After logging in for the first time, you'll be prompted to set up two-factor authentication 
+                for enhanced security. You'll need a smartphone with an authenticator app.
+              </p>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

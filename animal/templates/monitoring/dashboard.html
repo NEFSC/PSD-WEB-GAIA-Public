@@ -1,0 +1,1571 @@
+{% load static %}
+{% include 'sections/header.html' %}
+
+<meta name="csrf-token" content="{{ csrf_token }}">
+<style>
+    /* USWDS-based Monitoring Dashboard Styles */
+    .monitoring-header {
+        background: #005ea2;
+        background: linear-gradient(45deg, #005ea2, #0f4c81);
+        color: white;
+        padding: 2rem 0;
+        border-bottom: 4px solid #c9372c;
+    }
+    
+    .monitoring-header h1 {
+        color: white !important;
+        margin-bottom: 0.5rem;
+        font-family: "Source Sans Pro Web", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif;
+    }
+    
+    .monitoring-subheading {
+        color: #dfe7ef;
+        font-size: 1.1rem;
+        margin-bottom: 0;
+    }
+    
+    .monitoring-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 2rem;
+    }
+    
+    .control-group {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .status-info {
+        color: #dfe7ef;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .status-info .usa-icon {
+        width: 1rem;
+        height: 1rem;
+    }
+    
+    /* Metrics Cards */
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 2rem;
+        margin: 3rem 0;
+    }
+    
+    .metric-card {
+        background: white;
+        border: 1px solid #c9c9c9;
+        border-top: 4px solid #005ea2;
+        border-radius: 0.25rem;
+        text-align: center;
+        transition: box-shadow 0.15s ease-in-out, border 0.15s ease-in-out;
+    }
+    
+    .metric-card:hover {
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        border-left: 4px solid #005ea2;
+    }
+    
+    .metric-card.workers { border-top-color: #00a91c; }
+    .metric-card.tasks { border-top-color: #005ea2; }
+    .metric-card.pipeline { border-top-color: #8168b3; }
+    .metric-card.queue { border-top-color: #ffbe2e; }
+    
+    .metric-card .usa-card__container {
+        padding: 2rem;
+    }
+    
+    .metric-icon {
+        width: 3rem;
+        height: 3rem;
+        margin: 0 auto 1rem;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        color: white;
+    }
+    
+    .metric-icon.workers { background-color: #00a91c; }
+    .metric-icon.tasks { background-color: #005ea2; }
+    .metric-icon.pipeline { background-color: #8168b3; }
+    .metric-icon.queue { background-color: #ffbe2e; }
+    
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #1b1b1b;
+        line-height: 1;
+        margin-bottom: 0.5rem;
+    }
+    
+    .metric-label {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #565c65;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+    }
+    
+    /* Main Content Layout */
+    .content-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    @media (max-width: 64em) {
+        .content-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    /* Task List Styling */
+    .task-container {
+        max-height: 32rem;
+        overflow-y: auto;
+    }
+    
+    .task-item {
+        background: #f0f0f0;
+        border: 1px solid #dcdee0;
+        border-left: 4px solid #005ea2;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-radius: 0.25rem;
+        transition: all 0.15s ease-in-out;
+    }
+    
+    .task-item:hover {
+        background: white;
+        border-left-color: #c9372c;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+    
+    .task-item.no-tasks {
+        text-align: center;
+        border-left: 4px solid #ffbe2e;
+        color: #565c65;
+        font-style: italic;
+    }
+    
+    .task-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.75rem;
+    }
+    
+    .task-name {
+        font-weight: 600;
+        color: #1b1b1b;
+        font-size: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .task-name .usa-icon {
+        animation: spin 2s linear infinite;
+        color: #005ea2;
+    }
+    
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    
+    .task-details {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    .detail-row {
+        display: flex;
+        justify-content: space-between;
+    }
+    
+    .detail-label {
+        font-weight: 600;
+        color: #565c65;
+    }
+    
+    .detail-value {
+        font-family: "Roboto Mono Web", "Bitstream Vera Sans Mono", "Monaco", "Consolas", monospace;
+        color: #1b1b1b;
+    }
+    
+    .chain-id {
+        font-family: "Roboto Mono Web", "Bitstream Vera Sans Mono", "Monaco", "Consolas", monospace;
+        background: white;
+        border: 1px solid #c9c9c9;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.8rem;
+        color: #005ea2;
+        font-weight: 600;
+    }
+    
+    /* Worker Health Cards */
+    .worker-item {
+        background: #f0f0f0;
+        border: 1px solid #dcdee0;
+        border-left: 4px solid #00a91c;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-radius: 0.25rem;
+        transition: all 0.15s ease-in-out;
+    }
+    
+    .worker-item:hover {
+        background: white;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+    
+    .worker-item.offline {
+        border-left-color: #b50909;
+    }
+    
+    .worker-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.75rem;
+    }
+    
+    .worker-name {
+        font-weight: 600;
+        color: #1b1b1b;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .worker-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 1rem;
+    }
+    
+    .stat-item-small {
+        text-align: center;
+    }
+    
+    .stat-value-small {
+        display: block;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #005ea2;
+        line-height: 1;
+    }
+    
+    .stat-label-small {
+        font-size: 0.8rem;
+        color: #565c65;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+    }
+    
+    .queue-section {
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid #dcdee0;
+    }
+    
+    .queue-label {
+        font-weight: 600;
+        color: #565c65;
+        margin-bottom: 0.5rem;
+        display: block;
+    }
+    
+    .queue-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+    
+    /* Status Indicators */
+    .status-indicator {
+        display: inline-block;
+        width: 0.75rem;
+        height: 0.75rem;
+        border-radius: 50%;
+        margin-right: 0.5rem;
+        border: 2px solid white;
+    }
+    
+    .status-online { background-color: #00a91c; }
+    .status-offline { background-color: #b50909; }
+    .status-warning { background-color: #ffbe2e; }
+    
+    /* System Status Grid */
+    .system-status-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .status-item {
+        background: #f0f0f0;
+        border: 1px solid #dcdee0;
+        padding: 1rem;
+        border-radius: 0.25rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        transition: background-color 0.15s ease-in-out;
+    }
+    
+    .status-item:hover {
+        background: white;
+    }
+    
+    .status-item.online {
+        border-left: 4px solid #00a91c;
+    }
+    
+    .status-item.offline {
+        border-left: 4px solid #b50909;
+    }
+    
+    .status-item .usa-icon {
+        width: 2rem;
+        height: 2rem;
+        flex-shrink: 0;
+    }
+    
+    .status-item.online .usa-icon {
+        color: #00a91c;
+    }
+    
+    .status-item.offline .usa-icon {
+        color: #b50909;
+    }
+    
+    .status-text strong {
+        display: block;
+        font-weight: 600;
+        color: #1b1b1b;
+        margin-bottom: 0.25rem;
+    }
+    
+    .status-text span {
+        font-size: 0.9rem;
+        color: #565c65;
+    }
+    
+    /* Empty and Loading States */
+    .empty-state,
+    .loading-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: #565c65;
+    }
+    
+    .empty-state .usa-icon,
+    .loading-state .usa-icon {
+        width: 3rem;
+        height: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.6;
+    }
+    
+    .loading-state .usa-icon {
+        animation: spin 1s linear infinite;
+        color: #005ea2;
+    }
+    
+    /* Error States */
+    .error-state {
+        text-align: center;
+        padding: 2rem;
+        background: #f4e3db;
+        border: 1px solid #f4b9a0;
+        border-left: 4px solid #b50909;
+        border-radius: 0.25rem;
+        color: #6f3331;
+    }
+    
+    .error-state .usa-icon {
+        width: 2rem;
+        height: 2rem;
+        margin-bottom: 1rem;
+        color: #b50909;
+    }
+    
+    /* Responsive Design */
+    @media (max-width: 40em) {
+        .monitoring-controls {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        
+        .control-group {
+            justify-content: center;
+        }
+        
+        .metrics-grid {
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+        
+        .task-details {
+            grid-template-columns: 1fr;
+        }
+        
+        .worker-stats {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .system-status-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    /* Refresh indicator animation */
+    .refresh-spinning {
+        animation: spin 1s linear infinite;
+    }
+    
+    /* Custom button styles to match USWDS */
+    .usa-button--monitoring {
+        background-color: #005ea2;
+        border-color: #005ea2;
+    }
+    
+    .usa-button--monitoring:hover {
+        background-color: #0f4c81;
+        border-color: #0f4c81;
+    }
+    
+    .usa-button--kill {
+        background-color: #b50909;
+        border-color: #b50909;
+        color: white;
+    }
+    
+    .usa-button--kill:hover {
+        background-color: #8b0a03;
+        border-color: #8b0a03;
+        color: white;
+    }
+    
+    .usa-button--clear-queue {
+        background-color: #e07c24;
+        border-color: #e07c24;
+        color: white;
+    }
+    
+    .usa-button--clear-queue:hover {
+        background-color: #c05600;
+        border-color: #c05600;
+        color: white;
+    }
+    
+    /* Modal styles */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: none;
+        z-index: 9999;
+    }
+    
+    .modal-content {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 2rem;
+        border-radius: 0.25rem;
+        border: 1px solid #c9c9c9;
+        max-width: 500px;
+        width: 90%;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+</style>
+<!-- Header Section with USWDS Hero Pattern -->
+<div class="usa-hero monitoring-header">
+    <div class="grid-container">
+        <div class="usa-hero__callout">
+            <h1 class="usa-hero__heading">
+                <span class="usa-hero__heading--alt">GAIA</span>
+                Pipeline Monitoring Dashboard
+            </h1>
+            <p class="monitoring-subheading">
+                Real-time system status, worker health, and task monitoring
+            </p>
+            
+            <div class="monitoring-controls">
+                <div class="control-group">
+                    <button class="usa-button usa-button--monitoring" onclick="refreshDashboard()">
+                        <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                            <use xlink:href="{% static 'uswds/img/sprite.svg' %}#refresh"></use>
+                        </svg>
+                        Refresh
+                    </button>
+                    <button class="usa-button usa-button--outline usa-button--inverse" onclick="toggleAutoRefresh()">
+                        <svg class="usa-icon" aria-hidden="true" focusable="false" role="img" id="refresh-icon">
+                            <use xlink:href="{% static 'uswds/img/sprite.svg' %}#pause"></use>
+                        </svg>
+                        <span id="auto-refresh-label">Pause Auto-refresh</span>
+                    </button>
+                    <button class="usa-button usa-button--outline usa-button--inverse" data-open-modal="workerStatsModal">
+                        <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                            <use xlink:href="{% static 'uswds/img/sprite.svg' %}#info"></use>
+                        </svg>
+                        Worker Details
+                    </button>
+                    <button class="usa-button usa-button--outline usa-button--inverse" onclick="exportStatus()">
+                        <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                            <use xlink:href="{% static 'uswds/img/sprite.svg' %}#file_download"></use>
+                        </svg>
+                        Export Status
+                    </button>
+                    <button class="usa-button usa-button--clear-queue" onclick="showClearQueueModal()">
+                        <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                            <use xlink:href="{% static 'uswds/img/sprite.svg' %}#delete"></use>
+                        </svg>
+                        Clear Queue
+                    </button>
+                </div>
+                
+                <div class="status-info">
+                    <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                        <use xlink:href="{% static 'uswds/img/sprite.svg' %}#schedule"></use>
+                    </svg>
+                    <span id="last-updated">Last updated: --</span>
+                    <span id="refresh-indicator" class="refresh-spinning" style="display: none;">
+                        <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                            <use xlink:href="{% static 'uswds/img/sprite.svg' %}#refresh"></use>
+                        </svg>
+                        Refreshing...
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="usa-section">
+    <div class="grid-container">
+        <!-- Metrics Overview with USWDS Cards -->
+        <div class="metrics-grid">
+            <div class="usa-card metric-card workers">
+                <div class="usa-card__container">
+                    <div class="usa-card__body">
+                        <div class="metric-icon workers">
+                            <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                                <use xlink:href="{% static 'uswds/img/sprite.svg' %}#groups"></use>
+                            </svg>
+                        </div>
+                        <div id="total-workers" class="metric-value">--</div>
+                        <div class="metric-label">Active Workers</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="usa-card metric-card tasks">
+                <div class="usa-card__container">
+                    <div class="usa-card__body">
+                        <div class="metric-icon tasks">
+                            <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                                <use xlink:href="{% static 'uswds/img/sprite.svg' %}#assignment"></use>
+                            </svg>
+                        </div>
+                        <div id="total-active-tasks" class="metric-value">--</div>
+                        <div class="metric-label">Running Tasks</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="usa-card metric-card pipeline">
+                <div class="usa-card__container">
+                    <div class="usa-card__body">
+                        <div class="metric-icon pipeline">
+                            <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                                <use xlink:href="{% static 'uswds/img/sprite.svg' %}#account_tree"></use>
+                            </svg>
+                        </div>
+                        <div id="pipeline-tasks-count" class="metric-value">--</div>
+                        <div class="metric-label">Pipeline Tasks</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="usa-card metric-card queue">
+                <div class="usa-card__container">
+                    <div class="usa-card__body">
+                        <div class="metric-icon queue">
+                            <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                                <use xlink:href="{% static 'uswds/img/sprite.svg' %}#layers"></use>
+                            </svg>
+                        </div>
+                        <div id="queue-length" class="metric-value">--</div>
+                        <div class="metric-label">Queued Tasks</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="content-grid">
+            <!-- Active Pipeline Tasks -->
+            <div class="usa-card">
+                <div class="usa-card__container">
+                    <div class="usa-card__header">
+                        <h2 class="usa-card__heading">
+                            <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                                <use xlink:href="{% static 'uswds/img/sprite.svg' %}#settings"></use>
+                            </svg>
+                            Active Pipeline Tasks
+                        </h2>
+                    </div>
+                    <div class="usa-card__body">
+                        <div id="pipeline-tasks" class="task-container">
+                            <div class="loading-state">
+                                <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                                    <use xlink:href="{% static 'uswds/img/sprite.svg' %}#refresh"></use>
+                                </svg>
+                                <p>Loading pipeline tasks...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Status & Worker Health -->
+            <div class="usa-card">
+                <div class="usa-card__container">
+                    <div class="usa-card__header">
+                        <h2 class="usa-card__heading">
+                            <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                                <use xlink:href="{% static 'uswds/img/sprite.svg' %}#dns"></use>
+                            </svg>
+                            System Status
+                        </h2>
+                    </div>
+                    <div class="usa-card__body">
+                        <!-- System Status Grid -->
+                        <div class="system-status-grid">
+                            <div class="status-item" id="redis-status-item">
+                                <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                                    <use xlink:href="{% static 'uswds/img/sprite.svg' %}#storage"></use>
+                                </svg>
+                                <div class="status-text">
+                                    <strong>Redis Connection</strong>
+                                    <span id="redis-status-text">Checking...</span>
+                                </div>
+                            </div>
+                            
+                            <div class="status-item">
+                                <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                                    <use xlink:href="{% static 'uswds/img/sprite.svg' %}#list"></use>
+                                </svg>
+                                <div class="status-text">
+                                    <strong>Celery Queue</strong>
+                                    <span id="celery-queue-length">-- items</span>
+                                </div>
+                            </div>
+                            
+                            <div class="status-item">
+                                <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                                    <use xlink:href="{% static 'uswds/img/sprite.svg' %}#image"></use>
+                                </svg>
+                                <div class="status-text">
+                                    <strong>Imagery Queue</strong>
+                                    <span id="imagery-queue-length">-- items</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Worker Health Section -->
+                        <div style="margin-top: 2rem;">
+                            <h3 class="usa-section-heading">
+                                <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                                    <use xlink:href="{% static 'uswds/img/sprite.svg' %}#favorite"></use>
+                                </svg>
+                                Worker Health
+                            </h3>
+                            <div id="worker-health">
+                                <div class="loading-state">
+                                    <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                                        <use xlink:href="{% static 'uswds/img/sprite.svg' %}#refresh"></use>
+                                    </svg>
+                                    <p>Loading worker information...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Worker Details Modal using USWDS Modal -->
+<div class="usa-modal" id="workerStatsModal" aria-labelledby="workerStatsModalLabel" aria-describedby="workerStatsModalDescription" aria-hidden="true">
+    <div class="usa-modal__content">
+        <div class="usa-modal__body">
+            <h1 class="usa-modal__heading" id="workerStatsModalLabel">
+                <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                    <use xlink:href="{% static 'uswds/img/sprite.svg' %}#bar_chart"></use>
+                </svg>
+                Detailed Worker Statistics
+            </h1>
+            <div class="usa-prose">
+                <div class="usa-alert usa-alert--info">
+                    <div class="usa-alert__body">
+                        <h4 class="usa-alert__heading">Worker Statistics</h4>
+                        <p class="usa-alert__text" id="workerStatsModalDescription">Detailed JSON output of all worker statistics and health information.</p>
+                    </div>
+                </div>
+                <pre id="worker-stats-json" style="background: #f0f0f0; padding: 1rem; border-radius: 0.25rem; border: 1px solid #c9c9c9; font-family: 'Roboto Mono Web', monospace; font-size: 0.875rem; line-height: 1.4; color: #1b1b1b; max-height: 20rem; overflow-y: auto;"></pre>
+            </div>
+        </div>
+        <div class="usa-modal__footer">
+            <ul class="usa-button-group">
+                <li class="usa-button-group__item">
+                    <button type="button" class="usa-button usa-modal__close" aria-label="Close modal">
+                        <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                            <use xlink:href="{% static 'uswds/img/sprite.svg' %}#close"></use>
+                        </svg>
+                        Close
+                    </button>
+                </li>
+                <li class="usa-button-group__item">
+                    <button type="button" class="usa-button usa-button--outline" onclick="exportStatus()">
+                        <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                            <use xlink:href="{% static 'uswds/img/sprite.svg' %}#file_download"></use>
+                        </svg>
+                        Export Data
+                    </button>
+                </li>
+            </ul>
+        </div>
+    </div>
+    <button class="usa-modal__close" aria-label="Close this window" data-close-modal>
+        <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+            <use xlink:href="{% static 'uswds/img/sprite.svg' %}#close"></use>
+        </svg>
+    </button>
+</div>
+    </div>
+</div>
+
+<!-- Clear Queue Confirmation Modal -->
+<div class="usa-modal" id="clearQueueModal" aria-labelledby="clearQueueModalLabel" aria-describedby="clearQueueModalDescription" aria-hidden="true">
+    <div class="usa-modal__content">
+        <div class="usa-modal__body">
+            <h1 class="usa-modal__heading" id="clearQueueModalLabel">
+                <svg class="usa-icon" aria-hidden="true" focusable="false" role="img" style="color: #e07c24; margin-right: 0.5rem;">
+                    <use xlink:href="{% static 'uswds/img/sprite.svg' %}#warning"></use>
+                </svg>
+                Clear Queue Confirmation
+            </h1>
+            <div class="usa-alert usa-alert--warning" role="alert">
+                <div class="usa-alert__body">
+                    <h3 class="usa-alert__heading">Are you sure?</h3>
+                    <p class="usa-alert__text" id="clearQueueModalDescription">
+                        This action will <strong>permanently delete</strong>:
+                        <br>• All pending Celery tasks
+                        <br>• All task results and history
+                        <br>• All Redis cache data
+                        <br>• Any running background processes
+                    </p>
+                    <p class="usa-alert__text">
+                        <strong>This cannot be undone.</strong> Active downloads and processing will be interrupted.
+                    </p>
+                </div>
+            </div>
+            
+            <div style="margin-top: 1.5rem;">
+                <h4>Current Queue Status:</h4>
+                <div id="queue-status-preview" style="background: #f0f0f0; padding: 1rem; border-radius: 0.25rem; font-family: monospace; font-size: 0.9rem;">
+                    Loading queue status...
+                </div>
+            </div>
+        </div>
+        <div class="usa-modal__footer">
+            <ul class="usa-button-group">
+                <li class="usa-button-group__item">
+                    <button type="button" class="usa-button usa-button--secondary usa-modal__close" aria-label="Cancel">
+                        Cancel
+                    </button>
+                </li>
+                <li class="usa-button-group__item">
+                    <button type="button" class="usa-button usa-button--clear-queue" onclick="confirmClearQueue()">
+                        <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                            <use xlink:href="{% static 'uswds/img/sprite.svg' %}#delete"></use>
+                        </svg>
+                        Yes, Clear Queue
+                    </button>
+                </li>
+            </ul>
+        </div>
+    </div>
+    <button class="usa-modal__close" aria-label="Close this window" data-close-modal>
+        <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+            <use xlink:href="{% static 'uswds/img/sprite.svg' %}#close"></use>
+        </svg>
+    </button>
+</div>
+
+<script src="{% static 'uswds/uswds.min.js' %}"></script>
+<script src="{% static 'uswds/uswds-init.js' %}"></script>
+<script>
+
+
+let refreshInterval;
+let lastSystemData = null;
+let autoRefreshEnabled = true;
+
+// Initialize dashboard when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Dashboard initializing...');
+    console.log('User agent:', navigator.userAgent);
+    console.log('Page location:', window.location.href);
+    
+    // Initialize USWDS when available
+    if (typeof USWDS !== 'undefined') {
+        console.log('Initializing USWDS...');
+        USWDS.init();
+        console.log('USWDS initialized successfully');
+    } else {
+        console.warn('USWDS not loaded properly');
+        // Try to initialize after a short delay
+        setTimeout(function() {
+            if (typeof USWDS !== 'undefined') {
+                console.log('Initializing USWDS (delayed)...');
+                USWDS.init();
+                console.log('USWDS initialized successfully (delayed)');
+            } else {
+                console.error('USWDS failed to load - modal functionality may not work properly');
+            }
+        }, 100);
+    }
+    
+    // Test if fetch is available
+    if (!window.fetch) {
+        console.error('Fetch API not available!');
+        showAlert('Your browser does not support the required APIs. Please use a modern browser.', 'error');
+        return;
+    }
+    
+    // Test if the worker-health container exists
+    const workerContainer = document.getElementById('worker-health');
+    console.log('Worker health container found:', !!workerContainer);
+    if (!workerContainer) {
+        console.error('Worker health container not found in DOM');
+    }
+    
+    refreshDashboard();
+    startAutoRefresh();
+    
+    // Add event listener for worker stats modal
+    const workerStatsModal = document.getElementById('workerStatsModal');
+    console.log('Worker stats modal element found:', !!workerStatsModal);
+    if (workerStatsModal) {
+        // Listen for the modal open event
+        workerStatsModal.addEventListener('usa-modal:open', function() {
+            console.log('Worker stats modal opening...');
+            populateWorkerStatsModal();
+        });
+        
+        // Also listen for click on the trigger button as a fallback
+        const modalTrigger = document.querySelector('[data-open-modal="workerStatsModal"]');
+        console.log('Modal trigger button found:', !!modalTrigger);
+        if (modalTrigger) {
+            modalTrigger.addEventListener('click', function() {
+                console.log('Worker stats modal trigger clicked...');
+                // Small delay to ensure modal is about to open
+                setTimeout(populateWorkerStatsModal, 10);
+            });
+        }
+    }
+});
+
+function toggleAutoRefresh() {
+    console.log('Toggling auto-refresh...');
+    try {
+        const refreshIcon = document.getElementById('refresh-icon');
+        const refreshLabel = document.getElementById('auto-refresh-label');
+        
+        if (autoRefreshEnabled) {
+            stopAutoRefresh();
+            autoRefreshEnabled = false;
+            refreshLabel.textContent = 'Resume Auto-refresh';
+            refreshIcon.innerHTML = '<use xlink:href="{% static "uswds/img/sprite.svg" %}#play_arrow"></use>';
+            console.log('Auto-refresh paused');
+        } else {
+            startAutoRefresh();
+            autoRefreshEnabled = true;
+            refreshLabel.textContent = 'Pause Auto-refresh';
+            refreshIcon.innerHTML = '<use xlink:href="{% static "uswds/img/sprite.svg" %}#pause"></use>';
+            console.log('Auto-refresh resumed');
+        }
+    } catch (error) {
+        console.error('Error toggling auto-refresh:', error);
+        showAlert('Error toggling auto-refresh: ' + error.message, 'error');
+    }
+}
+
+function startAutoRefresh() {
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+    }
+    // Refresh every 5 seconds
+    refreshInterval = setInterval(refreshDashboard, 5000);
+    console.log('Auto-refresh started');
+}
+
+function stopAutoRefresh() {
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+    }
+}
+
+function refreshDashboard() {
+    console.log('Refreshing dashboard...');
+    showRefreshIndicator();
+    
+    // Fetch all data in parallel
+    Promise.all([
+        fetchSystemStatus(),
+        fetchPipelineTasks(),
+        fetchWorkerHealth()
+    ]).then(() => {
+        hideRefreshIndicator();
+        updateLastUpdated();
+        console.log('Dashboard refresh completed successfully');
+    }).catch(error => {
+        console.error('Error refreshing dashboard:', error);
+        hideRefreshIndicator();
+        showAlert('Error refreshing dashboard: ' + error.message, 'error');
+    });
+}
+
+function showRefreshIndicator() {
+    const indicator = document.getElementById('refresh-indicator');
+    if (indicator) {
+        indicator.style.display = 'inline-flex';
+    }
+}
+
+function hideRefreshIndicator() {
+    const indicator = document.getElementById('refresh-indicator');
+    if (indicator) {
+        indicator.style.display = 'none';
+    }
+}
+
+function updateLastUpdated() {
+    const now = new Date();
+    const element = document.getElementById('last-updated');
+    if (element) {
+        element.textContent = `Last updated: ${now.toLocaleTimeString()}`;
+    }
+}
+
+function fetchSystemStatus() {
+    return fetch('/monitoring/api/system-status/')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('System status data:', data);
+            lastSystemData = data;
+            updateSystemStatus(data);
+            updateMetrics(data);
+        })
+        .catch(error => {
+            console.error('Error fetching system status:', error);
+            showErrorState('system-status', 'Error loading system status');
+        });
+}
+
+function fetchPipelineTasks() {
+    return fetch('/monitoring/api/pipeline-tasks/')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Pipeline tasks data:', data);
+            updatePipelineTasks(data);
+        })
+        .catch(error => {
+            console.error('Error fetching pipeline tasks:', error);
+            showErrorState('pipeline-tasks', 'Error loading pipeline tasks');
+        });
+}
+
+function fetchWorkerHealth() {
+    console.log('Fetching worker health data...');
+    return fetch('/monitoring/api/worker-health/')
+        .then(response => {
+            console.log('Worker health response status:', response.status);
+            console.log('Worker health response headers:', response.headers);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Worker health data received:', data);
+            console.log('Number of workers:', data.workers ? data.workers.length : 0);
+            updateWorkerHealth(data);
+        })
+        .catch(error => {
+            console.error('Error fetching worker health:', error);
+            console.error('Full error details:', error);
+            showErrorState('worker-health', 'Error loading worker health: ' + error.message);
+        });
+}
+
+function updateMetrics(data) {
+    try {
+        // Update metric values
+        updateElement('total-workers', data.total_workers || 0);
+        updateElement('total-active-tasks', data.total_active_tasks || 0);
+        updateElement('pipeline-tasks-count', data.pipeline_tasks_count || 0);
+        
+        const totalQueued = data.queue_lengths ? 
+            ((data.queue_lengths.celery || 0) + (data.queue_lengths.imagery || 0)) : 0;
+        updateElement('queue-length', totalQueued);
+        
+    } catch (error) {
+        console.error('Error updating metrics:', error);
+    }
+}
+
+function updateSystemStatus(data) {
+    try {
+        const redisStatusItem = document.getElementById('redis-status-item');
+        const redisStatusText = document.getElementById('redis-status-text');
+        const celeryQueueLength = document.getElementById('celery-queue-length');
+        const imageryQueueLength = document.getElementById('imagery-queue-length');
+        
+        // Update Redis status
+        if (redisStatusItem && redisStatusText) {
+            const isOnline = data.redis_status === 'Connected';
+            redisStatusItem.className = `status-item ${isOnline ? 'online' : 'offline'}`;
+            redisStatusText.textContent = data.redis_status || 'Unknown';
+        }
+        
+        // Update queue lengths
+        if (celeryQueueLength) {
+            celeryQueueLength.textContent = `${data.queue_lengths?.celery || 0} items`;
+        }
+        if (imageryQueueLength) {
+            imageryQueueLength.textContent = `${data.queue_lengths?.imagery || 0} items`;
+        }
+        
+    } catch (error) {
+        console.error('Error updating system status:', error);
+    }
+}
+
+function updatePipelineTasks(data) {
+    try {
+        const container = document.getElementById('pipeline-tasks');
+        if (!container) return;
+        
+        let html = '';
+        
+        if (!data.pipeline_tasks || data.pipeline_tasks.length === 0) {
+            html = `
+                <div class="empty-state">
+                    <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                        <use xlink:href="{% static 'uswds/img/sprite.svg' %}#assignment"></use>
+                    </svg>
+                    <p>No active pipeline tasks</p>
+                </div>
+            `;
+        } else {
+            data.pipeline_tasks.forEach(task => {
+                const startTime = task.time_start ? 
+                    new Date(task.time_start * 1000).toLocaleString() : 'Unknown';
+                    
+                html += `
+                    <div class="task-item">
+                        <div class="task-header">
+                            <div class="task-name">
+                                <svg class="usa-icon refresh-spinning" aria-hidden="true" focusable="false" role="img">
+                                    <use xlink:href="{% static 'uswds/img/sprite.svg' %}#settings"></use>
+                                </svg>
+                                ${task.task_name || 'Unknown Task'}
+                            </div>
+                            <button class="usa-button usa-button--kill usa-button--unstyled" 
+                                    onclick="killTask('${task.task_id}')" 
+                                    title="Kill Task"
+                                    aria-label="Kill task ${task.task_name || task.task_id}">
+                                <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                                    <use xlink:href="{% static 'uswds/img/sprite.svg' %}#stop"></use>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="task-details">
+                            <div class="detail-row">
+                                <span class="detail-label">Chain ID:</span>
+                                <span class="detail-value chain-id">${task.chain_id || 'N/A'}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Worker:</span>
+                                <span class="detail-value">${task.worker || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Started:</span>
+                                <span class="detail-value">${startTime}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        container.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Error updating pipeline tasks:', error);
+        showErrorState('pipeline-tasks', 'Error displaying pipeline tasks');
+    }
+}
+
+function updateWorkerHealth(data) {
+    try {
+        console.log('updateWorkerHealth called with data:', data);
+        const container = document.getElementById('worker-health');
+        console.log('Worker health container found:', !!container);
+        if (!container) {
+            console.error('Worker health container not found!');
+            return;
+        }
+        
+        let html = '';
+        
+        if (!data.workers || data.workers.length === 0) {
+            console.log('No workers found in data, showing empty state');
+            html = `
+                <div class="empty-state">
+                    <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                        <use xlink:href="{% static 'uswds/img/sprite.svg' %}#groups"></use>
+                    </svg>
+                    <p>No workers available</p>
+                </div>
+            `;
+        } else {
+            console.log('Processing', data.workers.length, 'workers');
+            data.workers.forEach((worker, index) => {
+                console.log('Processing worker', index, ':', worker);
+                const isOnline = worker.status === 'online' || worker.registered_tasks > 0;
+                const queues = worker.active_queues && worker.active_queues.length > 0 
+                    ? worker.active_queues 
+                    : ['None'];
+                
+                console.log('Worker', worker.worker, 'isOnline:', isOnline, 'queues:', queues);
+                
+                html += `
+                    <div class="worker-item ${isOnline ? '' : 'offline'}">
+                        <div class="worker-header">
+                            <div class="worker-name">
+                                <div class="status-indicator ${isOnline ? 'status-online' : 'status-offline'}" 
+                                     aria-label="${isOnline ? 'Online' : 'Offline'}"></div>
+                                <span>${worker.worker || 'Unknown Worker'}</span>
+                            </div>
+                            <span class="usa-tag ${isOnline ? 'usa-tag--big' : 'usa-tag--big'}">
+                                ${isOnline ? 'Active' : 'Inactive'}
+                            </span>
+                        </div>
+                        <div class="worker-stats">
+                            <div class="stat-item-small">
+                                <span class="stat-value-small">${worker.registered_tasks || 0}</span>
+                                <span class="stat-label-small">Registered</span>
+                            </div>
+                            <div class="stat-item-small">
+                                <span class="stat-value-small">${worker.reserved_tasks || 0}</span>
+                                <span class="stat-label-small">Reserved</span>
+                            </div>
+                        </div>
+                        <div class="queue-section">
+                            <span class="queue-label">Active Queues:</span>
+                            <div class="queue-tags">
+                                ${queues.map(q => `<span class="usa-tag usa-tag--big">${q}</span>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        console.log('Setting worker health HTML:', html.length, 'characters');
+        container.innerHTML = html;
+        console.log('Worker health HTML updated successfully');
+        
+    } catch (error) {
+        console.error('Error updating worker health:', error);
+        console.error('Full error stack:', error.stack);
+        showErrorState('worker-health', 'Error displaying worker health');
+    }
+}
+
+function killTask(taskId) {
+    if (!confirm(`Are you sure you want to terminate task ${taskId}?`)) {
+        return;
+    }
+    
+    // Get CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                      document.querySelector('meta[name=csrf-token]')?.content;
+    
+    fetch('/monitoring/api/kill-task/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ task_id: taskId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            showAlert('Error: ' + data.error, 'error');
+        } else {
+            showAlert('Task terminated successfully', 'success');
+            refreshDashboard();
+        }
+    })
+    .catch(error => {
+        console.error('Error killing task:', error);
+        showAlert('Error terminating task', 'error');
+    });
+}
+
+// Function to populate modal data (called by event listener)
+function populateWorkerStatsModal() {
+    console.log('Populating worker stats modal...');
+    try {
+        if (lastSystemData && lastSystemData.worker_stats) {
+            const jsonElement = document.getElementById('worker-stats-json');
+            if (jsonElement) {
+                jsonElement.textContent = JSON.stringify(lastSystemData.worker_stats, null, 2);
+            }
+        } else {
+            const jsonElement = document.getElementById('worker-stats-json');
+            if (jsonElement) {
+                jsonElement.textContent = 'No worker statistics available. Try refreshing the dashboard first.';
+            }
+        }
+    } catch (error) {
+        console.error('Error populating worker stats modal:', error);
+        const jsonElement = document.getElementById('worker-stats-json');
+        if (jsonElement) {
+            jsonElement.textContent = 'Error loading worker statistics: ' + error.message;
+        }
+    }
+}
+
+// Legacy function kept for backwards compatibility (if called directly)
+function showWorkerStats() {
+    console.log('Showing worker stats...');
+    populateWorkerStatsModal();
+    
+    // Let USWDS handle the modal display
+    const button = document.querySelector('[data-open-modal="workerStatsModal"]');
+    if (button) {
+        button.click();
+    }
+}
+
+function exportStatus() {
+    console.log('Exporting status...');
+    try {
+        if (lastSystemData) {
+            const dataStr = JSON.stringify(lastSystemData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `pipeline-status-${new Date().toISOString().slice(0, 19)}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            console.log('Status exported successfully');
+            showAlert('Status exported successfully', 'success');
+        } else {
+            showAlert('No status data available. Try refreshing the dashboard first.', 'info');
+        }
+    } catch (error) {
+        console.error('Error exporting status:', error);
+        showAlert('Error exporting status: ' + error.message, 'error');
+    }
+}
+
+// Utility functions
+function updateElement(id, value) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.textContent = value;
+    }
+}
+
+function showErrorState(containerId, message) {
+    const container = document.getElementById(containerId);
+    if (container) {
+        container.innerHTML = `
+            <div class="error-state">
+                <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                    <use xlink:href="{% static 'uswds/img/sprite.svg' %}#error"></use>
+                </svg>
+                <p>${message}</p>
+            </div>
+        `;
+    }
+}
+
+function showAlert(message, type) {
+    console.log(`Alert [${type}]: ${message}`);
+    // You could implement a toast notification system here
+    // For now, we'll use browser alert
+    alert(message);
+}
+
+// Handle modal close events
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('usa-modal__close')) {
+        const modal = document.getElementById('workerStatsModal');
+        if (modal) {
+            modal.setAttribute('aria-hidden', 'true');
+            modal.classList.remove('is-visible');
+            document.body.style.overflow = '';
+        }
+    }
+});
+
+// Handle page visibility changes to pause/resume auto-refresh
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+        stopAutoRefresh();
+    } else if (autoRefreshEnabled) {
+        refreshDashboard();
+        startAutoRefresh();
+    }
+});
+
+// Keyboard navigation for accessibility
+document.addEventListener('keydown', function(e) {
+    // ESC key closes modal
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('workerStatsModal');
+        if (modal && modal.getAttribute('aria-hidden') === 'false') {
+            modal.setAttribute('aria-hidden', 'true');
+            modal.classList.remove('is-visible');
+            document.body.style.overflow = '';
+        }
+    }
+    
+    // Ctrl+R or F5 refreshes dashboard
+    if ((e.ctrlKey && e.key === 'r') || e.key === 'F5') {
+        e.preventDefault();
+        refreshDashboard();
+    }
+});
+
+// Clear Queue Functions
+function showClearQueueModal() {
+    console.log('Showing clear queue modal...');
+    
+    // Get current queue status before showing modal
+    updateQueueStatusPreview();
+    
+    // Show modal using USWDS modal functionality
+    const modal = document.getElementById('clearQueueModal');
+    if (modal) {
+        modal.setAttribute('aria-hidden', 'false');
+        modal.style.display = 'block';
+        modal.classList.add('is-visible');
+        document.body.style.overflow = 'hidden';
+        
+        // Focus on the modal for accessibility
+        modal.focus();
+    }
+}
+
+function hideClearQueueModal() {
+    const modal = document.getElementById('clearQueueModal');
+    if (modal) {
+        modal.setAttribute('aria-hidden', 'true');
+        modal.style.display = 'none';
+        modal.classList.remove('is-visible');
+        document.body.style.overflow = '';
+    }
+}
+
+function updateQueueStatusPreview() {
+    const statusDiv = document.getElementById('queue-status-preview');
+    if (!statusDiv) return;
+    
+    // Show current metrics that will be cleared
+    if (lastSystemData && lastSystemData.queues) {
+        const totalTasks = Object.values(lastSystemData.queues).reduce((sum, count) => sum + count, 0);
+        const activeCount = lastSystemData.active_tasks ? Object.keys(lastSystemData.active_tasks).length : 0;
+        
+        statusDiv.innerHTML = `
+Active Tasks: ${activeCount}
+Queued Tasks: ${totalTasks}
+Redis Status: ${lastSystemData.redis_status || 'Unknown'}
+
+⚠️  All of this data will be permanently deleted.
+        `.trim();
+    } else {
+        statusDiv.innerHTML = 'Loading queue status... Please wait.';
+        
+        // Fetch current status
+        fetch('/monitoring/api/system-status/')
+            .then(response => response.json())
+            .then(data => {
+                const totalTasks = Object.values(data.queues || {}).reduce((sum, count) => sum + count, 0);
+                const activeCount = data.active_tasks ? Object.keys(data.active_tasks).length : 0;
+                
+                statusDiv.innerHTML = `
+Active Tasks: ${activeCount}
+Queued Tasks: ${totalTasks}
+Redis Status: ${data.redis_status || 'Unknown'}
+
+⚠️  All of this data will be permanently deleted.
+                `.trim();
+            })
+            .catch(error => {
+                statusDiv.innerHTML = 'Error loading queue status: ' + error.message;
+            });
+    }
+}
+
+function confirmClearQueue() {
+    console.log('Clearing queue...');
+    
+    // Disable button to prevent double-clicks
+    const confirmButton = document.querySelector('#clearQueueModal .usa-button--clear-queue');
+    if (confirmButton) {
+        confirmButton.disabled = true;
+        confirmButton.innerHTML = `
+            <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                <use xlink:href="{% static 'uswds/img/sprite.svg' %}#refresh"></use>
+            </svg>
+            Clearing...
+        `;
+    }
+    
+    // Call the clear queue API
+    fetch('/monitoring/api/clear-queue/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        },
+        body: JSON.stringify({
+            confirm: true
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        console.log('Queue cleared successfully:', data);
+        hideClearQueueModal();
+        showAlert(`Queue cleared successfully! Removed ${data.keys_removed} keys.`, 'success');
+        
+        // Refresh dashboard to show cleared state
+        setTimeout(() => {
+            refreshDashboard();
+        }, 1000);
+    })
+    .catch(error => {
+        console.error('Error clearing queue:', error);
+        showAlert('Error clearing queue: ' + error.message, 'error');
+        hideClearQueueModal();
+    })
+    .finally(() => {
+        // Re-enable button
+        if (confirmButton) {
+            confirmButton.disabled = false;
+            confirmButton.innerHTML = `
+                <svg class="usa-icon" aria-hidden="true" focusable="false" role="img">
+                    <use xlink:href="{% static 'uswds/img/sprite.svg' %}#delete"></use>
+                </svg>
+                Yes, Clear Queue
+            `;
+        }
+    });
+}
+
+// Enhanced keyboard handling for clear queue modal
+document.addEventListener('keydown', function(e) {
+    const clearModal = document.getElementById('clearQueueModal');
+    if (clearModal && clearModal.style.display === 'block') {
+        // Escape key closes modal
+        if (e.key === 'Escape') {
+            hideClearQueueModal();
+            return;
+        }
+        // Enter key confirms (with focus on confirm button)
+        if (e.key === 'Enter' && document.activeElement.classList.contains('usa-button--clear-queue')) {
+            confirmClearQueue();
+            return;
+        }
+    }
+    
+    // Existing keyboard shortcuts...
+});
+
+// Close modal when clicking outside
+document.addEventListener('click', function(e) {
+    const clearModal = document.getElementById('clearQueueModal');
+    if (clearModal && clearModal.style.display === 'block') {
+        // Close if clicking on modal overlay (not modal content)
+        if (e.target === clearModal || e.target.classList.contains('usa-modal__content')) {
+            hideClearQueueModal();
+        }
+    }
+});
+
+// Initialize modal close buttons
+document.addEventListener('DOMContentLoaded', function() {
+    // Add click handlers to modal close buttons
+    const clearModalCloseButtons = document.querySelectorAll('#clearQueueModal .usa-modal__close, #clearQueueModal .usa-button--secondary');
+    clearModalCloseButtons.forEach(button => {
+        button.addEventListener('click', hideClearQueueModal);
+    });
+});
+
+</script>
+
+{% include 'sections/footer.html' %}

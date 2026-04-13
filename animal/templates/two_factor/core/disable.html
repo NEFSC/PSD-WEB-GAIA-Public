@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block title %}Disable Two-Factor Authentication{% endblock %}
+
+{% block content %}
+<div class="usa-section padding-top-4">
+  <div class="grid-container">
+    <div class="grid-row grid-gap flex-justify-center">
+      <div class="margin-bottom-2">
+        <img src="/static/gaia-logo.png" alt="GAIA Logo" class="usa-logo__img" width="25%">
+      </div>
+      <div class="grid-col-12 tablet:grid-col-8 desktop:grid-col-6">
+        <div class="bg-white padding-y-4 padding-x-5 border border-base-lighter radius-lg shadow-2">
+          <div class="text-center margin-bottom-3">
+            <svg class="usa-icon usa-icon--size-6 text-secondary margin-bottom-1" aria-hidden="true" focusable="false" role="img">
+              <use xlink:href="#svg-lock"></use>
+            </svg>
+            <h1 class="margin-y-0 font-heading-xl">{% trans "Disable Two-Factor Authentication" %}</h1>
+            <p class="text-base-dark margin-top-1">Modify your account security settings</p>
+          </div>
+          
+          <div class="usa-alert usa-alert--warning margin-bottom-3" role="alert">
+            <div class="usa-alert__body">
+              <h4 class="usa-alert__heading">⚠️ Security Warning</h4>
+              <p class="usa-alert__text">
+                Disabling two-factor authentication will significantly reduce your account security. 
+                Your account will only be protected by your password.
+              </p>
+            </div>
+          </div>
+
+          <div class="usa-card usa-card--header-first margin-bottom-3">
+            <div class="usa-card__container">
+              <div class="usa-card__header">
+                <h3 class="usa-card__heading">What happens when you disable 2FA?</h3>
+              </div>
+              <div class="usa-card__body">
+                <ul class="usa-list usa-list--unstyled">
+                  <li class="display-flex flex-align-start margin-bottom-2">
+                    <svg class="usa-icon usa-icon--size-3 text-secondary margin-right-1 margin-top-2px" aria-hidden="true" focusable="false" role="img">
+                      <use xlink:href="#svg-info"></use>
+                    </svg>
+                    <span>Your account will only be protected by your password</span>
+                  </li>
+                  <li class="display-flex flex-align-start margin-bottom-2">
+                    <svg class="usa-icon usa-icon--size-3 text-secondary margin-right-1 margin-top-2px" aria-hidden="true" focusable="false" role="img">
+                      <use xlink:href="#svg-info"></use>
+                    </svg>
+                    <span>Your authenticator app setup will be removed</span>
+                  </li>
+                  <li class="display-flex flex-align-start">
+                    <svg class="usa-icon usa-icon--size-3 text-success margin-right-1 margin-top-2px" aria-hidden="true" focusable="false" role="img">
+                      <use xlink:href="#svg-check"></use>
+                    </svg>
+                    <span>You can re-enable 2FA at any time from your account settings</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <form class="usa-form" method="POST">
+            {% csrf_token %}
+            <fieldset class="usa-fieldset">
+              <div class="margin-bottom-3">
+                <h4 class="margin-bottom-2">Confirm your identity</h4>
+                <label class="usa-label" for="{{ form.password.id_for_label }}">
+                  <strong>{{ form.password.label }}</strong>
+                </label>
+                <div class="usa-input-group">
+                  {{ form.password }}
+                  <button
+                    title="Toggle password visibility"
+                    type="button"
+                    class="usa-show-password"
+                    data-show-text="Show password"
+                    data-hide-text="Hide password"
+                    aria-controls="{{ form.password.id_for_label }}">
+                    Show password
+                  </button>
+                </div>
+                {% if form.password.errors %}
+                  <div class="usa-alert usa-alert--error margin-top-1" role="alert">
+                    <div class="usa-alert__body">
+                      <p class="usa-alert__text" style="margin-left: 0;">
+                        {{ form.password.errors|join:", " }}
+                      </p>
+                    </div>
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="margin-top-4 padding-top-2 border-top border-base-lighter">
+                <div class="display-flex flex-column tablet:flex-row tablet:flex-justify-end">
+                  <a href="{% url 'two_factor:profile' %}" 
+                     class="usa-button usa-button--outline margin-bottom-2 tablet:margin-bottom-0 tablet:margin-right-2 order-2 tablet:order-1">
+                    Cancel
+                  </a>
+                  <input class="usa-button usa-button--secondary order-1 tablet:order-2" 
+                         type="submit" 
+                         value="{% trans 'Disable Two-Factor Authentication' %}" />
+                </div>
+              </div>
+            </fieldset>
+          </form>
+
+          {% if form.non_field_errors %}
+          <div class="usa-alert usa-alert--error margin-top-3" role="alert">
+            <div class="usa-alert__body">
+              <h4 class="usa-alert__heading">Error</h4>
+              <p class="usa-alert__text" style="margin-left: 0;">
+                {{ form.non_field_errors|join:", " }}
+              </p>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SVG Icons -->
+<svg aria-hidden="true" focusable="false" width="0" height="0">
+  <defs>
+    <g id="svg-lock">
+      <path fill="currentColor" d="M12 1C8.318 1 5.33 3.988 5.33 7.67v1.663H4A2.001 2.001 0 0 0 2 11.333v8A2.001 2.001 0 0 0 4 21.333h16a2.001 2.001 0 0 0 2-2v-8a2.001 2.001 0 0 0-2-2h-1.33V7.67C18.67 3.988 15.682 1 12 1zm0 2c2.564 0 4.67 2.106 4.67 4.67v1.663H7.33V7.67C7.33 5.106 9.436 3 12 3zm-8 8.333h16v8H4v-8z"/>
+    </g>
+    <g id="svg-info">
+      <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+    </g>
+    <g id="svg-check">
+      <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+    </g>
+  </defs>
+</svg>
+{% endblock %}

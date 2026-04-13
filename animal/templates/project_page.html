@@ -1,0 +1,205 @@
+{% load static %}
+{% include 'sections/header.html' %}
+
+<style>
+.usa-card--disabled {
+    opacity: 0.6;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.usa-card--disabled .usa-card__heading {
+    color: #666;
+}
+
+.usa-card--disabled .usa-card__body p {
+    color: #888;
+}
+</style>
+
+<!-- Display Messages -->
+{% if messages %}
+  {% for message in messages %}
+    <div class="grid-container usa-alert usa-alert--{% if message.tags == 'error' %}error{% elif message.tags == 'success' %}success{% else %}info{% endif %}" role="alert">
+      <div class="usa-alert__body">
+        <h3 class="usa-alert__heading">{% if message.tags == 'error' %}Error{% elif message.tags == 'success' %}Success{% else %}Notice{% endif %}</h3>
+        <p class="usa-alert__text">{{ message }}</p>
+      </div>
+    </div>
+  {% endfor %}
+{% endif %}
+<div class="grid-row">
+    <div class="grid-col-3"></div>
+    <div class="grid-col-3">
+        {% if project %}
+            <h1 class="margin-bottom-0" style="white-space: nowrap;">{{ project.label }}</h1>
+            {% if user.is_superuser %}
+                <p class="margin-top-1">
+                    {% if cache_debug.cache_enabled %}
+                        <a href="/project/{{ project.id }}/cache/clear/" class="usa-button usa-button--unstyled font-sans-3xs">
+                            🗑️ Clear Page Cache
+                        </a>
+                        {% if cache_debug %}
+                            <br><small class="text-base-dark">
+                                Cache Status: 
+                                {% if cache_debug.availability_hit %}
+                                    <span style="color: green;">Availability ✓</span>
+                                {% else %}
+                                    <span style="color: orange;">Availability ✗</span>
+                                {% endif %}
+                                {% if cache_debug.work_summary_hit %}
+                                    <span style="color: green;">Summary ✓</span>
+                                {% else %}
+                                    <span style="color: orange;">Summary ✗</span>
+                                {% endif %}
+                            </small>
+                        {% endif %}
+                    {% endif %}
+                </p>
+            {% endif %}
+        {% endif %}
+    </div>
+  </div>
+
+<section class="grid-container usa-section">
+    <div class="grid-row flex-justify-center">
+        <div class="grid-col-12 tablet:grid-col-10 desktop:grid-col-12">
+            <ul class="usa-card-group">
+                <!-- <li class="usa-card tablet-lg:grid-col-6 widescreen:grid-col-4 desktop:grid-col-4">
+                    <div class="usa-card__container">
+                        <a href="" class="text-no-underline text-ink">
+                            <div class="usa-card__header">
+                                <h4 class="usa-card__heading">Areas of Interest</h4>
+                            </div>
+                            <div class="usa-card__body">
+                                <p>
+                                    View a map of areas of interest currently 
+                                    or historically tasked by GAIA.
+                                </p>
+                            </div>
+                        </a>
+                    </div>
+                </li> -->
+                <li class="usa-card tablet-lg:grid-col-6 widescreen:grid-col-4 desktop:grid-col-4">
+                    <div class="usa-card__container">
+                        <a href="load-imagery" class="text-no-underline text-ink">
+                            <div class="usa-card__header">
+                                <h4 class="usa-card__heading">Load Imagery</h4>
+                            </div>
+                            <div class="usa-card__body">
+                                <p>Query the image repository, preprocess files, and load them into your project.</p>
+                            </div>
+                        </a>
+                    </div>
+                </li>
+                <!-- <li class="usa-card tablet-lg:grid-col-6 widescreen:grid-col-4 desktop:grid-col-4">
+                    <div class="usa-card__container">
+                        <a href="load-points" class="text-no-underline text-ink">
+                            <div class="usa-card__header">
+                                <h4 class="usa-card__heading">Load Points</h4>
+                            </div>
+                            <div class="usa-card__body">
+                                <p>Upload a GeoJSON file, preview points, and load POIs using vendor ID from the GeoJSON name field.</p>
+                            </div>
+                        </a>
+                    </div>
+                </li> -->
+                <li class="usa-card tablet-lg:grid-col-6 widescreen:grid-col-4 desktop:grid-col-4">
+                    <!-- DISABLED: check_card_availability feature - card is now always enabled -->
+                    <div class="usa-card__container">
+                        <a href="detect" class="text-no-underline text-ink">
+                            <div class="usa-card__header">
+                                <h4 class="usa-card__heading">Add Points</h4>
+                            </div>
+                            <div class="usa-card__body">
+                                <p>Scan image grid cells to detect animals and place annotation points.</p>
+                            </div>
+                        </a>
+                    </div>
+                </li>
+                <li class="usa-card tablet-lg:grid-col-6 widescreen:grid-col-4 desktop:grid-col-4">
+                    <!-- DISABLED: check_card_availability feature - card is now always enabled -->
+                    <div class="usa-card__container">
+                        <a href="annotation" class="text-no-underline text-ink">
+                            <div class="usa-card__header">
+                                <h4 class="usa-card__heading">Annotate Points</h4>
+                            </div>
+                            <div class="usa-card__body">
+                                <p>Label detections one at a time by looking at each point individually.</p>
+                            </div>
+                        </a>
+                    </div>
+                </li>
+                <li class="usa-card tablet-lg:grid-col-6 widescreen:grid-col-4 desktop:grid-col-4">
+                    <!-- DISABLED: check_card_availability feature - card is now always enabled -->
+                    <div class="usa-card__container">
+                        <a href="multiview" class="text-no-underline text-ink">
+                            <div class="usa-card__header">
+                                <h4 class="usa-card__heading">Annotate Batch</h4>
+                            </div>
+                            <div class="usa-card__body">
+                                <p>Label similar detections across an entire scene in a single batch step.</p>
+                            </div>
+                        </a>
+                    </div>
+                </li>
+                <li class="usa-card tablet-lg:grid-col-6 widescreen:grid-col-4 desktop:grid-col-4">
+                    <!-- DISABLED: check_card_availability feature - card is now always enabled -->
+                    <div class="usa-card__container">
+                        <a href="validation" class="text-no-underline text-ink">
+                            <div class="usa-card__header">
+                                <h4 class="usa-card__heading">Validate Labels</h4>
+                            </div>
+                            <div class="usa-card__body">
+                                <p>Confirm species identity and confidence for each annotated detection.</p>
+                            </div>
+                        </a>
+                    </div>
+                </li>
+                {% if user.is_superuser %}
+                    <li class="usa-card tablet-lg:grid-col-6 widescreen:grid-col-4 desktop:grid-col-4">
+                        <!-- DISABLED: check_card_availability feature - card is now always enabled -->
+                        <div class="usa-card__container">
+                            <a href="deduplication" class="text-no-underline text-ink">
+                                <div class="usa-card__header">
+                                    <h4 class="usa-card__heading">Review Duplicates</h4>
+                                </div>
+                                <div class="usa-card__body">
+                                    <p>	Identify and remove any redundant or overlapping animal detections.</p>
+                                </div>
+                            </a>
+                        </div>
+                    </li>
+                {% endif %}
+                <li class="usa-card tablet-lg:grid-col-6 widescreen:grid-col-4 desktop:grid-col-4">
+                    <div class="usa-card__container">
+                        <a href="details" class="text-no-underline text-ink">
+                            <div class="usa-card__header">
+                                <h4 class="usa-card__heading">Project Details</h4>
+                            </div>
+                            <div class="usa-card__body">
+                                <p>Review project info, COG coverage, recent imagery requests, and completion status.</p>
+                            </div>
+                        </a>
+                    </div>
+                </li>
+                <li class="usa-card tablet-lg:grid-col-6 widescreen:grid-col-4 desktop:grid-col-4">
+                    <!-- DISABLED: check_card_availability feature - card is now always enabled -->
+                    <div class="usa-card__container">
+                        <a href="dissemination" class="text-no-underline text-ink">
+                            <div class="usa-card__header">
+                                <h4 class="usa-card__heading">Export Results</h4>
+                            </div>
+                            <div class="usa-card__body">
+                                <p>Download all confirmed annotations as a CSV file for further analysis.</p>
+                            </div>
+                        </a>
+                    </div>
+                </li>
+            </ul>
+        </div>
+    </div>
+</section>
+</body>
+{% include 'sections/footer.html' %}
+</html>

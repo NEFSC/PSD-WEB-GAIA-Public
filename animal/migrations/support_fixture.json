@@ -1,0 +1,23 @@
+[
+  { "model": "animal.confidence", "fields": { "value": "possible", "label": "Possible ( ≤ 75% )" } },
+  { "model": "animal.confidence", "fields": { "value": "probable", "label": "Probable ( 75 - 85% )" } },
+  { "model": "animal.confidence", "fields": { "value": "definite", "label": "Definite ( ≥ 85% )" } },
+
+  { "model": "animal.classification", "fields": { "value": "water", "label": "Water" } },
+  { "model": "animal.classification", "fields": { "value": "cloud", "label": "Cloud" } },
+  { "model": "animal.classification", "fields": { "value": "bird", "label": "Bird" } },
+  { "model": "animal.classification", "fields": { "value": "waves", "label": "Waves" } },
+  { "model": "animal.classification", "fields": { "value": "plane", "label": "Plane" } },
+  { "model": "animal.classification", "fields": { "value": "ship", "label": "Ship" } },
+  { "model": "animal.classification", "fields": { "value": "shadow", "label": "Shadow" } },
+  { "model": "animal.classification", "fields": { "value": "oil", "label": "Oil" } },
+  { "model": "animal.classification", "fields": { "value": "aquaculture", "label": "Aquaculture" } },
+  { "model": "animal.classification", "fields": { "value": "debris", "label": "Debris" } },
+  { "model": "animal.classification", "fields": { "value": "rock", "label": "Rock" } },
+  { "model": "animal.classification", "fields": { "value": "mudflats_or_land", "label": "Mudflats or Water" } },
+  { "model": "animal.classification", "fields": { "value": "buoy", "label": "Buoy" } },
+  { "model": "animal.classification", "fields": { "value": "animal", "label": "animal" } },
+  { "model": "animal.classification", "fields": { "value": "zooplankton", "label": "Zooplankton" } },
+  { "model": "animal.classification", "fields": { "value": "land", "label": "Land" } },
+  { "model": "animal.classification", "fields": { "value": "unsure", "label": "Unsure" } }
+]

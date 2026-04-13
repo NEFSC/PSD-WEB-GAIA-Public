@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}YubiKey Setup - GAIA{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="fas fa-key"></i> Set Up YubiKey Authentication</h4>
+                </div>
+                <div class="card-body">
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <div class="mb-4">
+                        <p class="lead">
+                            YubiKey provides strong two-factor authentication using a physical security key. 
+                            Simply touch your YubiKey when prompted to generate a secure token.
+                        </p>
+                        
+                        <div class="alert alert-info">
+                            <h6><i class="fas fa-info-circle"></i> How to use your YubiKey:</h6>
+                            <ol class="mb-0">
+                                <li>Insert your YubiKey into a USB port</li>
+                                <li>Click in the "YubiKey Token" field below</li>
+                                <li>Touch the gold button on your YubiKey</li>
+                                <li>The form will automatically submit when the token is complete</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    {% if existing_yubikeys %}
+                        <div class="mb-4">
+                            <h5 class="text-success"><i class="fas fa-check-circle"></i> Your Registered YubiKeys:</h5>
+                            <div class="list-group mb-3">
+                                {% for device in existing_yubikeys %}
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>{{ device.name }}</strong>
+                                            <br><small class="text-muted">Public ID: {{ device.public_id }}</small>
+                                            <br><small class="text-muted">Added: {{ device.created_at|date:"M d, Y" }}</small>
+                                        </div>
+                                        <a href="{% url 'remove_yubikey' device.id %}" 
+                                           class="btn btn-sm btn-outline-danger"
+                                           onclick="return confirm('Are you sure you want to remove this YubiKey from your account?')">
+                                            <i class="fas fa-trash"></i> Remove
+                                        </a>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    <h5>Add New YubiKey</h5>
+                    <form method="post" id="yubikey-form">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="yubikey_otp" class="form-label">YubiKey Token <span class="text-danger">*</span></label>
+                            <input type="password" 
+                                   class="form-control" 
+                                   id="yubikey_otp" 
+                                   name="yubikey_otp" 
+                                   placeholder="Click here and touch your YubiKey..." 
+                                   required
+                                   autocomplete="off">
+                            <div class="form-text">
+                                <i class="fas fa-hand-pointer"></i> Insert your YubiKey and touch the button to generate a token
+                            </div>
+                            <div class="progress mt-2" style="height: 5px; display: none;" id="progress-bar">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'two_factor:setup' %}" class="btn btn-secondary me-md-2">
+                                <i class="fas fa-arrow-left"></i> Back to Setup
+                            </a>
+                            <button type="submit" class="btn btn-primary" id="submit-btn">
+                                <i class="fas fa-plus"></i> Add YubiKey
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const otpField = document.getElementById('yubikey_otp');
+    const form = document.getElementById('yubikey-form');
+    const progressBar = document.getElementById('progress-bar');
+    const submitBtn = document.getElementById('submit-btn');
+    
+    // Auto-submit form when YubiKey token is complete (44 characters)
+    otpField.addEventListener('input', function(e) {
+        const value = e.target.value;
+        const expectedLength = 44;
+        
+        // Show progress
+        if (value.length > 0) {
+            progressBar.style.display = 'block';
+            const progress = Math.min((value.length / expectedLength) * 100, 100);
+            progressBar.querySelector('.progress-bar').style.width = progress + '%';
+        } else {
+            progressBar.style.display = 'none';
+        }
+        
+        // Auto-submit when complete
+        if (value.length === expectedLength) {
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+            submitBtn.disabled = true;
+            
+            // Small delay to ensure the full token is captured
+            setTimeout(() => {
+                form.submit();
+            }, 100);
+        }
+    });
+    
+    // Focus on the OTP field when page loads
+    otpField.focus();
+    
+    // Prevent form submission if token is incomplete
+    form.addEventListener('submit', function(e) {
+        const otpValue = otpField.value.trim();
+        if (otpValue.length !== 44) {
+            e.preventDefault();
+            alert('Please generate a complete YubiKey token by touching your YubiKey.');
+            otpField.focus();
+            return false;
+        }
+    });
+});
+</script>
+
+<style>
+.progress-bar {
+    background-color: #28a745;
+}
+
+#yubikey_otp:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.alert-info {
+    border-left: 4px solid #17a2b8;
+}
+
+.card-header {
+    border-bottom: 2px solid #dee2e6;
+}
+</style>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends "two_factor/core/base.html" %}
+{% load i18n %}
+{% load uswds_tags %}
+
+{% block content %}
+<div class="grid-container">
+    <div class="grid-row grid-gap">
+        <div class="grid-col-12">
+            <nav class="usa-breadcrumb" aria-label="Breadcrumbs">
+                <ol class="usa-breadcrumb__list">
+                    <li class="usa-breadcrumb__list-item">
+                        <a href="{% url 'account_page' %}" class="usa-breadcrumb__link">{% trans "Account" %}</a>
+                    </li>
+                    <li class="usa-breadcrumb__list-item">
+                        <a href="{% url 'two_factor_settings' %}" class="usa-breadcrumb__link">{% trans "Two-Factor Authentication" %}</a>
+                    </li>
+                    <li class="usa-breadcrumb__list-item usa-current" aria-current="page">
+                        <span>{% trans "Disable All 2FA" %}</span>
+                    </li>
+                </ol>
+            </nav>
+
+            <div class="usa-prose">
+                <h1>{% trans "Disable All Two-Factor Authentication" %}</h1>
+            </div>
+
+            <div class="usa-alert usa-alert--error">
+                <div class="usa-alert__body">
+                    <h4 class="usa-alert__heading">{% trans "Are you sure?" %}</h4>
+                    <p class="usa-alert__text">
+                        {% trans "This action will:" %}
+                    </p>
+                    <ul>
+                        <li>{% trans "Remove all authenticator apps (TOTP devices)" %}</li>
+                        <li>{% trans "Remove all security keys and passkeys" %}</li>
+                        <li>{% trans "Delete all backup recovery tokens" %}</li>
+                        <li>{% trans "Make your account less secure" %}</li>
+                    </ul>
+                    <p class="usa-alert__text">
+                        <strong>{% trans "This action cannot be undone." %}</strong>
+                    </p>
+                </div>
+            </div>
+
+            <div class="usa-card margin-top-3">
+                <div class="usa-card__container">
+                    <div class="usa-card__body">
+                        <form method="post">
+                            {% csrf_token %}
+                            <div class="grid-row grid-gap margin-top-3">
+                                <div class="grid-col-auto">
+                                    <button type="submit" class="usa-button usa-button--secondary">
+                                        {% trans "Yes, Disable All 2FA" %}
+                                    </button>
+                                </div>
+                                <div class="grid-col-auto">
+                                    <a href="{% url 'two_factor_settings' %}" class="usa-button usa-button--outline">
+                                        {% trans "Cancel" %}
+                                    </a>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

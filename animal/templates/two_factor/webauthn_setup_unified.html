@@ -1,0 +1,157 @@
+{% extends "two_factor/_base.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="grid-container">
+    <div class="grid-row grid-gap">
+        <div class="grid-col-12">
+            <nav class="usa-breadcrumb" aria-label="Breadcrumbs">
+                <ol class="usa-breadcrumb__list">
+                    <li class="usa-breadcrumb__list-item">
+                        <a href="{% url 'account_page' %}" class="usa-breadcrumb__link">{% trans "Account" %}</a>
+                    </li>
+                    <li class="usa-breadcrumb__list-item">
+                        <a href="{% url 'two_factor_settings' %}" class="usa-breadcrumb__link">{% trans "Two-Factor Authentication" %}</a>
+                    </li>
+                    <li class="usa-breadcrumb__list-item usa-current" aria-current="page">
+                        <span>{% trans "Add Security Key" %}</span>
+                    </li>
+                </ol>
+            </nav>
+
+            <div class="usa-prose">
+                <h1>{% trans "Add Security Key or Passkey" %}</h1>
+                <p class="usa-intro">
+                    {% trans "Set up a hardware security key (like YubiKey) or device passkey for secure, passwordless authentication." %}
+                </p>
+            </div>
+
+            <!-- Setup Instructions -->
+            <div class="usa-card margin-bottom-3">
+                <div class="usa-card__container">
+                    <div class="usa-card__header">
+                        <h2 class="usa-card__heading">{% trans "Instructions" %}</h2>
+                    </div>
+                    <div class="usa-card__body">
+                        <ol class="usa-list">
+                            <li>{% trans "Give your security key a name to identify it" %}</li>
+                            <li>{% trans "Click 'Add Security Key' and follow your browser's prompts" %}</li>
+                            <li>{% trans "For hardware keys: Insert your key and touch the button when it blinks" %}</li>
+                            <li>{% trans "For device passkeys: Use Touch ID, Face ID, or Windows Hello" %}</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Registration Form -->
+            <div class="usa-card margin-bottom-3">
+                <div class="usa-card__container">
+                    <div class="usa-card__header">
+                        <h2 class="usa-card__heading">{% trans "Register New Security Key" %}</h2>
+                    </div>
+                    <div class="usa-card__body">
+                        <form id="passkey-form">
+                            {% csrf_token %}
+                            <div class="usa-form-group">
+                                <label class="usa-label" for="passkey-name">
+                                    {% trans "Security Key Name" %}
+                                </label>
+                                <input class="usa-input" 
+                                       id="passkey-name" 
+                                       name="name" 
+                                       type="text" 
+                                       placeholder="{% trans 'e.g., YubiKey 5, iPhone Touch ID, Work Laptop' %}"
+                                       maxlength="100" 
+                                       required>
+                                <div class="usa-hint">{% trans "Choose a name to help you identify this key later." %}</div>
+                            </div>
+
+                            <div class="margin-top-3">
+                                <button type="button" id="register-passkey" class="usa-button">
+                                    {% trans "Add Security Key" %}
+                                </button>
+                                <a href="{% url 'two_factor_settings' %}" class="usa-button usa-button--outline">
+                                    {% trans "Cancel" %}
+                                </a>
+                            </div>
+                        </form>
+
+                        <div id="registration-status" class="margin-top-2" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Existing Keys -->
+            {% if existing_credentials %}
+            <div class="usa-card margin-bottom-3">
+                <div class="usa-card__container">
+                    <div class="usa-card__header">
+                        <h2 class="usa-card__heading">{% trans "Your Security Keys" %}</h2>
+                    </div>
+                    <div class="usa-card__body">
+                        <div class="usa-table-container--scrollable">
+                            <table class="usa-table usa-table--striped">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">{% trans "Name" %}</th>
+                                        <th scope="col">{% trans "Added" %}</th>
+                                        <th scope="col">{% trans "Last Used" %}</th>
+                                        <th scope="col">{% trans "Actions" %}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for credential in existing_credentials %}
+                                        <tr>
+                                            <td>{{ credential.name }}</td>
+                                            <td>{{ credential.created_at|date:"M j, Y" }}</td>
+                                            <td>
+                                                {% if credential.last_used %}
+                                                    {{ credential.last_used|date:"M j, Y" }}
+                                                {% else %}
+                                                    {% trans "Never" %}
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <a href="{% url 'remove_webauthn' credential.id %}" 
+                                                   class="usa-button usa-button--secondary usa-button--outline"
+                                                   onclick="return confirm('{% trans "Are you sure you want to remove this security key?" %}')">
+                                                    {% trans "Remove" %}
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Test Authentication -->
+            {% if existing_credentials %}
+            <div class="usa-card">
+                <div class="usa-card__container">
+                    <div class="usa-card__header">
+                        <h2 class="usa-card__heading">{% trans "Test Your Security Key" %}</h2>
+                    </div>
+                    <div class="usa-card__body">
+                        <p>{% trans "Verify your security key is working correctly." %}</p>
+                        <button type="button" id="test-passkey" class="usa-button usa-button--outline">
+                            {% trans "Test Security Key" %}
+                        </button>
+                        <div id="test-status" class="margin-top-2" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+// Same JavaScript as the existing WebAuthn setup, but with updated endpoints
+// Include all the base64url helper functions and WebAuthn logic
+{% include "two_factor/webauthn_setup_js.html" %}
+</script>
+{% endblock %}

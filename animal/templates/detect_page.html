@@ -1,0 +1,1115 @@
+{% load static %} {% include 'sections/header.html' %}
+<style>
+  #gdal-map {
+    height: 50vh;
+    width: 100%;
+    position: relative;
+  }
+  #layer-switcher {
+    position: absolute;
+    bottom: 4rem;
+    right: 1rem;
+    width: 8rem;
+    background: white;
+    padding: 10px;
+    border-radius: 5px; /* Rounded corners */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Subtle shadow for better visibility */
+    z-index: 1000;
+  }
+   .ol-viewport .ol-overlaycontainer-stopevent .ol-zoom {
+      top: .5em;
+      right: .5em;
+      left: auto;  /* Override default left positioning */
+    }
+</style>
+<section class="usa-section padding-top-0 padding-bottom-0">
+  <div class="grid-row">
+    <div class="grid-col-3"></div>
+    <div class="grid-col-3">
+      <h1 class="margin-bottom-0">Add Points</h1>
+      {% if project %}
+        <p class="site-subheading margin-top-1" style="white-space: nowrap;">{{ project.label }}</p>
+      {% endif %}
+    </div>
+  </div>
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  {% if error_message %}
+    <div class="usa-alert usa-alert--error grid-container">
+      <div class="usa-alert__body">
+        <h3 class="usa-alert__heading">Error</h3>
+        <p class="usa-alert__text">An error has occurred:</p>
+      {{ error_message }}
+      </div>
+    </div>
+  {% endif %}
+  {% if info_message %}
+    <div class="usa-alert usa-alert--info grid-container" role="alert">
+      <div class="usa-alert__body">
+        <p class="usa-alert__text">
+            {{ info_message }}
+        </p>
+      </div>
+    </div>
+    {% else %}
+  <div class="grid-row flex-justify">
+    <div class="grid-col-2 padding-left-2 padding-top-2">
+          <p><strong>Catalog ID:</strong> </p>
+        <p><strong>Vendor ID:</strong> <span id="vendor-id-display">{{ vendor_id }}</span></p>
+    </div>
+      <div class="grid-container" style="margin-left:0; width: 60%; max-width: 100%; height:70vh;">
+        <div id="osm-map" class="map padding-bottom-5" style="position: absolute; top: inherit; left: inherit; width: 60%; height: 70vh; z-index: 1;"></div>
+        <div id="gdal-map" class="map padding-bottom-5" style="position: absolute; top: inherit; left: inherit; width: 60%; height: 70vh; z-index: 2;">
+          <div id="layer-switcher">
+            <label>
+              <input type="radio" name="layer" value="street" />
+              Street Map
+            </label>
+            <br />
+            <label>
+              <input type="radio" name="layer" value="satellite" checked />
+              Satellite
+            </label><br>
+            <label>
+              <input type="checkbox" name="pointer" value="checked" checked />
+              Search Area
+            </label>
+          </div>
+          <div id="pointer-switcher">
+          </div>
+        </div>
+        <div class="grid-row controls flex-row" style="position:relative; top:69vh; z-index: 3;">
+          <div class="grid-col">
+            <label for="exposure">Brightness: </label>
+            <input
+              type="range"
+              id="exposure"
+              min="-0.5"
+              max="0.5"
+              step="0.1"
+              value="0"
+            />
+          </div>
+          <div class="grid-col">
+            <label for="contrast">Contrast: </label>
+            <input
+              type="range"
+              id="contrast"
+              min="-0.5"
+              max="0.5"
+              step="0.1"
+              value="0"
+            />
+          </div>
+          <div class="grid-col">
+            <label for="saturation">Saturation: </label>
+            <input
+              type="range"
+              id="saturation"
+              min="-0.5"
+              max="0.5"
+              step="0.1"
+              value="0"
+            />
+          </div>
+          <div class="grid-col text-right">
+            <form id="fishnet_form" method="post">
+            {% csrf_token %}
+            <input type="hidden" name="fishnet" value="{{ id }}">
+            <input type="hidden" name="user" value="{{ user.id }}">
+            <input type="hidden" name="form_type" value="form">
+          <button class="usa-button usa-button--outline usa-button--big margin-right-1" type="button" id="back-button" disabled>Back</button>
+          <button class="usa-button usa-button--big" type="submit" id="next-button">Next</button>
+          </form>
+        </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+      <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/geotiff"></script>
+      <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/ol@10.1.0/ol.css"
+      />
+      <script src="https://cdn.jsdelivr.net/npm/ol@v10.1.0/dist/ol.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.6.0/proj4.js"></script>
+      <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+      <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet/dist/leaflet.css"
+      />
+
+      <script>
+		// Global variables to track current state
+		let currentFishnetId = {% if id %}{{ id }}{% else %}null{% endif %};
+		let currentVendorId = "{% if vendor_id %}{{ vendor_id }}{% endif %}";
+		let gdalMap, osmMap, vectorSource, cogLayer, baseLayer;
+    let drawPointBtn, removePointBtn;
+    let drawModeActive = false;
+    let draw;
+    let selectSubmittedInteraction;
+    let translateSubmittedInteraction;
+    let selectedSubmittedFeature = null;
+		let baseAjaxUrl = `/project/{{ project_id }}/detect/`;  // Always use base URL for AJAX
+		
+		// Ensure variables are passed correctly
+		let latitude = {% if latitude %}{{ latitude }}{% else %}42.049081{% endif %}; //42.049081 //;
+		let longitude = {% if longitude %}{{ longitude }}{% else %}-70.183762{% endif %};  //-70.183762 //;
+		let cogUrl = "{% if cogurl %}{{ cogurl }}{% endif %}";
+    const initialSubmittedPoints = JSON.parse('{% if submitted_points_json %}{{ submitted_points_json|escapejs }}{% else %}[]{% endif %}');
+    const projectScale = Number("{{ project.zoom_level.value|default:1250 }}");
+    const FEATURE_ROLE = {
+      CENTER: 'center',
+      SEARCH_AREA: 'search-area',
+      DRAFT_POINT: 'draft-point',
+      SUBMITTED_POINT: 'submitted-point'
+    };
+
+    const draftPointStyle = new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 7,
+        fill: new ol.style.Fill({ color: '#d83933' }),
+        stroke: new ol.style.Stroke({ color: '#ffffff', width: 2 })
+      })
+    });
+
+    const submittedPointStyle = new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 7,
+        fill: new ol.style.Fill({ color: '#205493' }),
+        stroke: new ol.style.Stroke({ color: '#ffffff', width: 2 })
+      })
+    });
+
+    const submittedPointSelectedStyle = new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 8,
+        fill: new ol.style.Fill({ color: '#205493' }),
+        stroke: new ol.style.Stroke({ color: '#fdb81e', width: 2 })
+      })
+    });
+
+    const nonOwnerSubmittedPointStyle = new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 7,
+        fill: new ol.style.Fill({ color: '#6b7280' }),
+        stroke: new ol.style.Stroke({ color: '#ffffff', width: 2 })
+      })
+    });
+
+		// Map Initialization
+		window.onload = function() {
+      if (!document.getElementById('gdal-map')) {
+        return;
+      }
+			// Initialize maps, points, and other layers here
+			initializeMaps();
+      setupNavigationButtons();
+      initializeNavigationState();
+		};
+
+    let navigationStack = [];
+    let currentNavigationIndex = -1;
+    let isNavigating = false;
+
+    function initializeNavigationState() {
+      if (currentFishnetId) {
+        navigationStack = [currentFishnetId];
+        currentNavigationIndex = 0;
+        updateUrlForFishnet(currentFishnetId);
+      }
+
+      updateNavigationButtons();
+    }
+
+    function setupNavigationButtons() {
+			const nextButton = document.getElementById('next-button');
+      const backButton = document.getElementById('back-button');
+			const form = document.getElementById('fishnet_form');
+			
+			if (nextButton) {
+				nextButton.addEventListener('click', function(e) {
+					e.preventDefault();
+					loadNextCell();
+				});
+			}
+
+      if (backButton) {
+        backButton.addEventListener('click', function(e) {
+          e.preventDefault();
+          loadPreviousCell();
+        });
+      }
+			
+			// Also prevent form submission
+			if (form) {
+				form.addEventListener('submit', function(e) {
+					e.preventDefault();
+					loadNextCell();
+				});
+			}
+		}
+
+    function getCsrfToken() {
+      const tokenInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+      return tokenInput ? tokenInput.value : '';
+    }
+
+    function updateNavigationButtons() {
+      const backButton = document.getElementById('back-button');
+      if (backButton) {
+        backButton.disabled = isNavigating || currentNavigationIndex <= 0;
+      }
+    }
+
+    function setNavigationLoading(isLoading) {
+      isNavigating = isLoading;
+      const nextButton = document.getElementById('next-button');
+      if (nextButton) {
+        nextButton.disabled = isLoading;
+        nextButton.innerHTML = isLoading ? 'Loading...' : 'Next';
+      }
+
+      updateNavigationButtons();
+    }
+
+    function updateUrlForFishnet(fishnetId) {
+      const newUrl = `/project/{{ project_id }}/detect/${fishnetId}/`;
+      window.history.replaceState({ fishnetId: fishnetId }, '', newUrl);
+    }
+
+    function applyFishnetData(data) {
+      currentFishnetId = data.fishnet_id;
+      currentVendorId = data.vendor_id;
+      latitude = data.latitude;
+      longitude = data.longitude;
+
+      updateMap(data);
+      cogUrl = data.cogurl;
+      updateUrlForFishnet(data.fishnet_id);
+    }
+
+    function parseJsonResponse(response) {
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+      console.log('Response content-type:', response.headers.get('content-type'));
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        return response.text().then(text => {
+          console.error('Expected JSON but got:', contentType);
+          console.error('Response text (first 500 chars):', text.substring(0, 500));
+          throw new Error('Server returned non-JSON response: ' + contentType);
+        });
+      }
+
+      return response.json();
+    }
+
+    function getSubmittedStyle(feature, isSelected = false) {
+      if (!feature.get('isOwner')) {
+        return nonOwnerSubmittedPointStyle;
+      }
+      return isSelected ? submittedPointSelectedStyle : submittedPointStyle;
+    }
+
+    function createSubmittedFeature(pointData) {
+      const coordinate = ol.proj.fromLonLat([pointData.longitude, pointData.latitude]);
+      const feature = new ol.Feature({
+        geometry: new ol.geom.Point(coordinate),
+        name: `Submitted Point ${pointData.id}`,
+      });
+
+      feature.set('featureRole', FEATURE_ROLE.SUBMITTED_POINT);
+      feature.set('poiId', pointData.id);
+      feature.set('isOwner', !!pointData.is_owner);
+      feature.set('createdByUsername', pointData.created_by_username || 'Unknown');
+      feature.set('createdById', pointData.created_by_id || null);
+      feature.set('vendorId', pointData.vendor_id || currentVendorId);
+      feature.setStyle(getSubmittedStyle(feature));
+      return feature;
+    }
+
+    function updateSubmittedPointsWindow() {
+      // Submitted points are still tracked in map state, but list UI is intentionally hidden.
+    }
+
+    function updateRemoveButtonState() {
+      if (!removePointBtn) {
+        return;
+      }
+
+      const canRemove = !!(selectedSubmittedFeature && selectedSubmittedFeature.get('isOwner'));
+      removePointBtn.disabled = !canRemove;
+      removePointBtn.style.opacity = canRemove ? '1' : '0.6';
+    }
+
+    function clearSubmittedFeatures() {
+      if (!vectorSource) {
+        return;
+      }
+
+      const submittedFeatures = vectorSource.getFeatures().filter(feature =>
+        feature.get('featureRole') === FEATURE_ROLE.SUBMITTED_POINT
+      );
+      submittedFeatures.forEach(feature => vectorSource.removeFeature(feature));
+
+      if (selectSubmittedInteraction) {
+        selectSubmittedInteraction.getFeatures().clear();
+      }
+      selectedSubmittedFeature = null;
+      updateRemoveButtonState();
+      updateSubmittedPointsWindow();
+    }
+
+    function applySubmittedPoints(points) {
+      clearSubmittedFeatures();
+
+      if (!Array.isArray(points) || points.length === 0) {
+        return;
+      }
+
+      const submittedFeatures = points.map(point => createSubmittedFeature(point));
+      vectorSource.addFeatures(submittedFeatures);
+      updateSubmittedPointsWindow();
+    }
+
+    function getDraftPointFeatures() {
+      if (!vectorSource) {
+        return [];
+      }
+
+      return vectorSource.getFeatures().filter(feature =>
+        feature.getGeometry().getType() === 'Point' &&
+        feature.get('featureRole') === FEATURE_ROLE.DRAFT_POINT
+      );
+    }
+
+    async function submitDraftPoints() {
+      const draftPointFeatures = getDraftPointFeatures();
+      if (draftPointFeatures.length === 0) {
+        return { count: 0, points: [] };
+      }
+
+      const pointData = draftPointFeatures.map(feature => {
+        const coordinates = feature.getGeometry().getCoordinates();
+        const lonLat = ol.proj.toLonLat(coordinates);
+        return {
+          geometry: {
+            type: 'Point',
+            coordinates: [lonLat[0], lonLat[1]],
+          },
+          vendor_id: currentVendorId,
+          project_id: '{{project_id}}',
+        };
+      });
+
+      const csrfToken = getCsrfToken();
+      const formData = new FormData();
+      formData.append('points', JSON.stringify(pointData));
+
+      const response = await fetch(`/project/{{project_id}}/poi/create/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: formData,
+      });
+
+      const data = await parseJsonResponse(response);
+      const submittedPoints = Array.isArray(data.points) ? data.points : [];
+
+      draftPointFeatures.forEach(feature => vectorSource.removeFeature(feature));
+      submittedPoints.forEach(point => {
+        vectorSource.addFeature(createSubmittedFeature(point));
+      });
+
+      if (drawModeActive) {
+        drawModeActive = false;
+        if (draw) {
+          gdalMap.removeInteraction(draw);
+          draw = null;
+        }
+        if (drawPointBtn) {
+          drawPointBtn.style.backgroundColor = '#4CAF50';
+          drawPointBtn.innerHTML = 'Add Point';
+        }
+      }
+      updateSubmittedPointsWindow();
+
+      const submittedIds = submittedPoints.map(point => point.id).join(', ');
+      showNotification(`Successfully submitted points. IDs: ${submittedIds}`, 'success');
+
+      return { count: submittedPoints.length, points: submittedPoints };
+    }
+
+    async function persistMovedPoint(feature) {
+      const poiId = feature.get('poiId');
+      const coordinates = feature.getGeometry().getCoordinates();
+      const lonLat = ol.proj.toLonLat(coordinates);
+      const previousCoordinate = feature.get('previousCoordinate');
+
+      try {
+        const response = await fetch(`/project/{{ project_id }}/poi/${poiId}/move/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          body: JSON.stringify({
+            geometry: {
+              type: 'Point',
+              coordinates: [lonLat[0], lonLat[1]],
+            },
+          }),
+        });
+
+        await parseJsonResponse(response);
+        showNotification(`Moved point #${poiId}.`, 'success');
+      } catch (error) {
+        if (previousCoordinate) {
+          feature.getGeometry().setCoordinates(previousCoordinate);
+        }
+        showNotification(`Failed to move point #${poiId}: ${error.message}`, 'error');
+      }
+    }
+
+    async function deleteSelectedPoint() {
+      if (!selectedSubmittedFeature || !selectedSubmittedFeature.get('isOwner')) {
+        return;
+      }
+
+      const poiId = selectedSubmittedFeature.get('poiId');
+      try {
+        const response = await fetch(`/project/{{ project_id }}/poi/${poiId}/delete/`, {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': getCsrfToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+        });
+        await parseJsonResponse(response);
+
+        vectorSource.removeFeature(selectedSubmittedFeature);
+        if (selectSubmittedInteraction) {
+          selectSubmittedInteraction.getFeatures().clear();
+        }
+        selectedSubmittedFeature = null;
+        updateRemoveButtonState();
+        updateSubmittedPointsWindow();
+        showNotification(`Removed point #${poiId}.`, 'success');
+      } catch (error) {
+        showNotification(`Failed to remove point #${poiId}: ${error.message}`, 'error');
+      }
+    }
+
+    function loadCellById(fishnetId) {
+      console.log('loadCellById called for fishnetId:', fishnetId);
+      const csrfToken = getCsrfToken();
+      setNavigationLoading(true);
+
+      return fetch(baseAjaxUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': csrfToken
+        },
+        body: new URLSearchParams({
+          'action': 'load',
+          'fishnet_id': fishnetId,
+          'csrfmiddlewaretoken': csrfToken
+        })
+      })
+      .then(parseJsonResponse)
+      .then(data => {
+        if (!data.success) {
+          throw new Error(data.message || 'Failed to load fishnet');
+        }
+
+        applyFishnetData(data);
+        setNavigationLoading(false);
+      })
+      .catch(error => {
+        console.error('Error loading fishnet:', error);
+        showNotification('Failed to load cell: ' + error.message, 'error');
+        setNavigationLoading(false);
+        throw error;
+      });
+    }
+
+    function loadPreviousCell() {
+      if (isNavigating || currentNavigationIndex <= 0) {
+        return;
+      }
+
+      const targetIndex = currentNavigationIndex - 1;
+      const previousFishnetId = navigationStack[targetIndex];
+      currentNavigationIndex = targetIndex;
+
+      loadCellById(previousFishnetId).catch(() => {
+        currentNavigationIndex = targetIndex + 1;
+        updateNavigationButtons();
+      });
+    }
+
+		async function loadNextCell() {
+      if (isNavigating) {
+        return;
+      }
+
+      try {
+        await submitDraftPoints();
+      } catch (error) {
+        showNotification('Failed to submit points: ' + error.message, 'error');
+        return;
+      }
+
+      if (currentNavigationIndex < navigationStack.length - 1) {
+        const targetIndex = currentNavigationIndex + 1;
+        const nextFromHistoryId = navigationStack[targetIndex];
+        currentNavigationIndex = targetIndex;
+
+        loadCellById(nextFromHistoryId).catch(() => {
+          currentNavigationIndex = targetIndex - 1;
+          updateNavigationButtons();
+        });
+        return;
+      }
+
+			console.log('loadNextCell called with currentFishnetId:', currentFishnetId);
+      const nextButton = document.getElementById('next-button');
+      const csrfToken = getCsrfToken();
+      setNavigationLoading(true);
+			
+			console.log('Sending AJAX request to:', baseAjaxUrl);
+			console.log('Request data:', {
+				action: 'next',
+				fishnet_id: currentFishnetId,
+				csrfmiddlewaretoken: csrfToken
+			});
+			
+			// Send AJAX request for next cell
+      fetch(baseAjaxUrl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/x-www-form-urlencoded',
+					'X-Requested-With': 'XMLHttpRequest',
+					'X-CSRFToken': csrfToken
+				},
+				body: new URLSearchParams({
+					'action': 'next',
+					'fishnet_id': currentFishnetId,
+					'csrfmiddlewaretoken': csrfToken
+				})
+			})
+      .then(parseJsonResponse)
+			.then(data => {
+				console.log('Response data:', data);
+				if (data.success) {
+          console.log('Updated state:', data);
+          applyFishnetData(data);
+
+          if (currentNavigationIndex < navigationStack.length - 1) {
+            navigationStack = navigationStack.slice(0, currentNavigationIndex + 1);
+          }
+          navigationStack.push(data.fishnet_id);
+          currentNavigationIndex = navigationStack.length - 1;
+          setNavigationLoading(false);
+					
+				} else if (data.finished) {
+					// No more cells to review
+					showFinishedMessage(data.message);
+          isNavigating = false;
+          updateNavigationButtons();
+          if (nextButton) {
+            nextButton.disabled = true;
+            nextButton.innerHTML = 'Finished';
+          }
+				} else {
+          setNavigationLoading(false);
+					throw new Error(data.message || 'Failed to load next cell');
+				}
+			})
+			.catch(error => {
+				console.error('Error loading next cell:', error);
+				showNotification('Failed to load next cell: ' + error.message, 'error');
+        setNavigationLoading(false);
+			});
+		}
+
+    function updateMap(data) {
+			console.log('updateMap called with data:', data);
+			
+			// Update COG layer if vendor_id changed
+			if (data.cogurl && data.cogurl !== cogUrl) {
+				console.log('Updating COG layer with new URL:', data.cogurl);
+				const newCogSource = new ol.source.GeoTIFF({
+					sources: [{
+						url: new URL(data.cogurl, window.location.origin).toString()
+					}]
+				});
+				
+				cogLayer.setSource(newCogSource);
+			}
+			
+			// Update map center
+			const newCenter = ol.proj.fromLonLat([data.longitude, data.latitude]);
+			console.log('Updating map center to:', newCenter);
+			gdalMap.getView().setCenter(newCenter);
+			osmMap.getView().setCenter(newCenter);
+			
+      // Reset overlays for the new fishnet and then hydrate submitted points from response.
+      vectorSource.clear();
+			
+			// Create new point feature
+			const point = new ol.Feature({
+				geometry: new ol.geom.Point(newCenter),
+				name: 'Point of Interest',
+			});
+      point.set('featureRole', FEATURE_ROLE.CENTER);
+			
+			// Create new cell boundary
+			const cellCoords = data.cell_coordinates.map(coord => 
+				ol.proj.fromLonLat([coord[0], coord[1]])
+			);
+			console.log('New cell coordinates:', cellCoords);
+			
+			const boxFeature = new ol.Feature({
+				geometry: new ol.geom.Polygon([cellCoords]),
+				name: 'Search Area'
+			});
+      boxFeature.set('featureRole', FEATURE_ROLE.SEARCH_AREA);
+			
+			// Style the features
+			boxFeature.setStyle(new ol.style.Style({
+				stroke: new ol.style.Stroke({
+					color: 'rgba(255, 255, 255, 0.5)',
+					width: 2,
+					lineDash: [6, 3]
+				}),
+				fill: new ol.style.Fill({
+					color: 'rgba(0, 255, 0, 0.01)'
+				}),
+			}));
+			
+			// Add features to vector source
+      vectorSource.addFeatures([point, boxFeature]);
+      applySubmittedPoints(data.submitted_points || []);
+			
+			// Update hidden form fields
+			const fishnetInput = document.querySelector('input[name="fishnet"]');
+			if (fishnetInput) {
+				fishnetInput.value = data.fishnet_id;
+				console.log('Updated fishnet input to:', data.fishnet_id);
+			}
+
+      const vendorIdDisplay = document.getElementById('vendor-id-display');
+      if (vendorIdDisplay) {
+        vendorIdDisplay.textContent = data.vendor_id || '';
+      }
+		}
+
+		function showNotification(message, type = 'info') {
+			const notification = document.createElement('div');
+			notification.className = `map-notification ${type}`;
+			notification.textContent = message;
+			
+			const colors = {
+				'success': '#4CAF50',
+				'error': '#D83933',
+				'warning': '#FFC107',
+				'info': '#0071bc'
+			};
+			
+			notification.style.cssText = `
+				position: fixed;
+				top: 20px;
+				left: 50%;
+				transform: translateX(-50%);
+				background: ${colors[type]};
+				color: white;
+				padding: 12px 20px;
+				border-radius: 4px;
+				box-shadow: 0 3px 6px rgba(0,0,0,0.16);
+				z-index: 2000;
+				max-width: 80%;
+				text-align: center;
+			`;
+			
+			document.body.appendChild(notification);
+			
+			setTimeout(() => {
+				notification.style.opacity = '0';
+				notification.style.transition = 'opacity 0.5s ease-out';
+				setTimeout(() => {
+					if (notification.parentNode) {
+						document.body.removeChild(notification);
+					}
+				}, 500);
+			}, 3000);
+		}
+
+		function showFinishedMessage(message) {
+			const alertDiv = document.createElement('div');
+			alertDiv.className = 'usa-alert usa-alert--success grid-container';
+			alertDiv.innerHTML = `
+				<div class="usa-alert__body">
+					<h3 class="usa-alert__heading">Complete!</h3>
+					<p class="usa-alert__text">${message}</p>
+				</div>
+			`;
+			
+			// Insert after the header
+			const headerSection = document.querySelector('.usa-section');
+			headerSection.appendChild(alertDiv);
+			
+			// Show confetti celebration
+			if (typeof confetti !== 'undefined') {
+				confetti({
+					particleCount: 100,
+					spread: 70,
+					origin: { y: 0.6 }
+				});
+			}
+		}
+
+		function initializeMaps() {
+			console.log('Initializing maps with:', { latitude, longitude, cogUrl, currentFishnetId });
+			
+			// Re-initialize the maps based on the provided latitude, longitude, and COG URL
+			const point = new ol.Feature({
+				geometry: new ol.geom.Point(ol.proj.fromLonLat([longitude, latitude])),
+				name: 'Point of Interest',
+			});
+      point.set('featureRole', FEATURE_ROLE.CENTER);
+
+			let cogSource = null;
+			if (cogUrl) {
+				cogSource = new ol.source.GeoTIFF({
+					sources: [{
+						url: new URL(cogUrl, window.location.origin).toString()
+					}]
+				});
+			}
+			baseLayer = new ol.layer.Tile({ source: new ol.source.OSM() });
+			vectorSource = new ol.source.Vector({ features: [point] });
+      // Create a bounding box around the point (approx 300 meters)
+      // Calculate box dimensions for 600m width and 400m height
+      // Use polygon shape from fishnet.cell to define the search area boundaries
+      const fishnetCellWkt = '{{ cell|escapejs }}';  // Get the raw WKT string
+          
+      // Convert the fishnet cell coordinates to OpenLayers format
+      const bbox = [];
+          
+      // Process the WKT polygon coordinates
+      if (fishnetCellWkt) {
+        // Remove any SRID prefix
+        const wktWithoutSrid = fishnetCellWkt.replace(/SRID=\d+;/i, '');
+        
+        // Check if it's a POLYGON WKT
+        const match = wktWithoutSrid.match(/POLYGON\s*\(\((.*?)\)\)/i);
+        
+        if (match && match[1]) {
+          // Extract coordinates from the matched pattern
+          const coordPairs = match[1].split(',');
+          
+          // Process each coordinate pair
+          coordPairs.forEach(pair => {
+            const [lon, lat] = pair.trim().split(' ').map(parseFloat);
+            if (!isNaN(lon) && !isNaN(lat)) {
+              bbox.push(ol.proj.fromLonLat([lon, lat]));
+            }
+          });
+        }
+      } 
+
+      // Create a polygon feature for the bounding box
+      const boxFeature = new ol.Feature({
+        geometry: new ol.geom.Polygon([bbox]),
+        name: 'Search Area'
+      });
+      boxFeature.set('featureRole', FEATURE_ROLE.SEARCH_AREA);
+
+      // Add feature to the vector source
+      vectorSource.addFeature(boxFeature);
+
+      // Create vector layer with styling
+      const vectorLayer = new ol.layer.Vector({
+        source: vectorSource,
+        style: new ol.style.Style({
+            stroke: new ol.style.Stroke({
+            color: 'rgba(255, 255, 255, 0.5)',
+            width: 2,
+            lineDash: [6, 3]  // Creates dashed line pattern
+            }),
+          fill: new ol.style.Fill({
+            color: 'rgba(0, 255, 0, 0.01)'
+          }),
+        })
+      });
+      // Draw / edit controls
+      drawPointBtn = document.createElement('button');
+      drawPointBtn.innerHTML = 'Add Point';
+      drawPointBtn.className = 'usa-button';
+      drawPointBtn.style.cssText = 'position: absolute; top: 10px; left: 10px; z-index: 1000; background-color: #4CAF50; color: white;';
+      document.getElementById('gdal-map').appendChild(drawPointBtn);
+
+      removePointBtn = document.createElement('button');
+      removePointBtn.innerHTML = 'Remove Selected Point';
+      removePointBtn.className = 'usa-button usa-button--secondary';
+      removePointBtn.style.cssText = 'position: absolute; top: 10px; left: 130px; z-index: 1000;';
+      removePointBtn.disabled = true;
+      removePointBtn.style.opacity = '0.6';
+      document.getElementById('gdal-map').appendChild(removePointBtn);
+
+      function createDrawInteraction() {
+        draw = new ol.interaction.Draw({
+          source: vectorSource,
+          type: 'Point'
+        });
+
+        draw.on('drawend', function(evt) {
+          const feature = evt.feature;
+          feature.set('name', 'New Point');
+          feature.set('featureRole', FEATURE_ROLE.DRAFT_POINT);
+          feature.setStyle(draftPointStyle);
+        });
+
+        return draw;
+      }
+
+      selectSubmittedInteraction = new ol.interaction.Select({
+        condition: ol.events.condition.click,
+        filter: function(feature) {
+          return (
+            feature.get('featureRole') === FEATURE_ROLE.SUBMITTED_POINT &&
+            feature.get('isOwner') === true
+          );
+        }
+      });
+
+      selectSubmittedInteraction.on('select', function(evt) {
+        evt.deselected.forEach(feature => {
+          feature.setStyle(getSubmittedStyle(feature));
+        });
+
+        selectedSubmittedFeature = evt.selected[0] || null;
+
+        evt.selected.forEach(feature => {
+          feature.setStyle(getSubmittedStyle(feature, true));
+        });
+
+        updateRemoveButtonState();
+      });
+
+      translateSubmittedInteraction = new ol.interaction.Translate({
+        features: selectSubmittedInteraction.getFeatures(),
+      });
+
+      translateSubmittedInteraction.on('translatestart', function(evt) {
+        evt.features.forEach(feature => {
+          feature.set('previousCoordinate', feature.getGeometry().getCoordinates().slice());
+        });
+      });
+
+      translateSubmittedInteraction.on('translateend', function(evt) {
+        evt.features.forEach(feature => {
+          persistMovedPoint(feature);
+        });
+      });
+
+      // Toggle drawing mode
+      function toggleDrawMode() {
+        setDrawMode(!drawModeActive);
+      }
+
+      function setDrawMode(isEnabled) {
+        if (isEnabled === drawModeActive) {
+          return;
+        }
+
+        drawModeActive = isEnabled;
+
+        if (drawModeActive) {
+          draw = createDrawInteraction();
+          gdalMap.addInteraction(draw);
+          drawPointBtn.style.backgroundColor = '#D83933';
+          drawPointBtn.innerHTML = 'Cancel';
+        } else {
+          if (draw) {
+            gdalMap.removeInteraction(draw);
+            draw = null;
+          }
+          drawPointBtn.style.backgroundColor = '#4CAF50';
+          drawPointBtn.innerHTML = 'Add Point';
+        }
+      }
+
+      // Add click event to the button
+      drawPointBtn.addEventListener('click', toggleDrawMode);
+      removePointBtn.addEventListener('click', deleteSelectedPoint);
+
+			const variables = {
+				exposure: 0,
+				contrast: 0,
+				saturation: 0,
+			};
+
+			// Initialize the COG image layer only if we have a COG URL
+			if (cogSource) {
+				cogLayer = new ol.layer.WebGLTile({
+					style: {
+						exposure: ['var', 'exposure'],
+						contrast: ['var', 'contrast'],
+						saturation: ['var', 'saturation'],
+						variables: variables,
+					},
+					source: cogSource,
+					attributions: 'GAIA',
+				});
+			} else {
+				cogLayer = new ol.layer.Tile({ source: new ol.source.OSM() });
+			}
+
+		// Load saved settings and initialize controls
+		window.ImageAdjustmentPersistence.initializeControls(variables, cogLayer);
+		
+		// Setup event listeners for persistence
+		window.ImageAdjustmentPersistence.setupEventListeners(cogLayer);
+
+    // Reusable function to set map scale
+    function setMapScale(map, scale) {
+      const view = map.getView();
+      const projection = view.getProjection();
+      const center = view.getCenter();
+
+      const pixelSizeMeters = 0.00028;
+      let localResolution = scale * pixelSizeMeters;
+      const factor = ol.proj.getPointResolution(projection, 1, center);
+      const viewResolution = localResolution / factor;
+
+      view.setResolution(viewResolution);
+    }
+
+		osmMap = new ol.Map({
+			target: 'osm-map',
+			layers: [baseLayer, vectorLayer],
+			view: new ol.View({
+				center: ol.proj.fromLonLat([longitude, latitude]),
+				zoom: 18,
+			}),
+		});
+
+		gdalMap = new ol.Map({
+			target: 'gdal-map',
+			layers: [baseLayer, cogLayer, vectorLayer],
+			view: osmMap.getView(),
+		});
+
+		const scaleLineControl = new ol.control.ScaleLine();
+		gdalMap.addControl(scaleLineControl)
+
+      gdalMap.addInteraction(selectSubmittedInteraction);
+      gdalMap.addInteraction(translateSubmittedInteraction);
+      applySubmittedPoints(initialSubmittedPoints);
+
+    setTimeout(() => {
+      setMapScale(gdalMap, projectScale);
+    }, 100);
+
+        document.querySelectorAll('input[name="layer"]').forEach((input) => {
+        	input.addEventListener('change', (event) => {
+        		const value = event.target.value;
+        		baseLayer.setVisible(value === 'street');
+        		cogLayer.setVisible(value === 'satellite');
+        	});
+        });
+        document.querySelector('input[name="pointer"]').addEventListener('change', (event) => {
+          vectorLayer.setVisible(event.target.checked);
+        });
+      // Add context menu for coordinate copying
+      const contextMenuContainer = document.createElement('div');
+      contextMenuContainer.className = 'ol-contextmenu';
+      contextMenuContainer.style.cssText = 'position: absolute; background: white; border: 1px solid #ccc; padding: 5px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); display: none; z-index: 1000;';
+      document.body.appendChild(contextMenuContainer);
+
+      let clickedCoordinate = null;
+
+      // Function to show context menu with coordinate copying option
+      function showContextMenu(coordinate, pixel) {
+        clickedCoordinate = coordinate;
+        const lonLat = ol.proj.toLonLat(coordinate);
+        
+        const formattedLon = lonLat[0].toFixed(6);
+        const formattedLat = lonLat[1].toFixed(6);
+        
+        contextMenuContainer.innerHTML = `
+          <div style="cursor: pointer; padding: 8px;" id="copy-coordinates">
+            Copy coordinates: ${formattedLon}, ${formattedLat}
+          </div>
+        `;
+        
+        contextMenuContainer.style.left = `${pixel[0]}px`;
+        contextMenuContainer.style.top = `${pixel[1]}px`;
+        contextMenuContainer.style.display = 'block';
+        
+        document.getElementById('copy-coordinates').addEventListener('click', function() {
+          const coordText = `${formattedLon},${formattedLat}`;
+          navigator.clipboard.writeText(coordText)
+            .then(() => {
+              const successMsg = document.createElement('div');
+              successMsg.textContent = 'Coordinates copied!';
+              successMsg.style.cssText = 'position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #4CAF50; color: white; padding: 10px; border-radius: 4px; z-index: 2000;';
+              document.body.appendChild(successMsg);
+              
+              setTimeout(() => {
+                document.body.removeChild(successMsg);
+              }, 2000);
+              
+              contextMenuContainer.style.display = 'none';
+            })
+            .catch(err => {
+              console.error('Failed to copy coordinates: ', err);
+            });
+        });
+      }
+
+      // Add right-click event handler to the map
+      gdalMap.getViewport().addEventListener('contextmenu', function (evt) {
+        evt.preventDefault();
+        
+        const pixel = [evt.clientX, evt.clientY];
+        const coordinate = gdalMap.getCoordinateFromPixel(pixel);
+        
+        showContextMenu(coordinate, pixel);
+      });
+
+      // Hide context menu when clicking elsewhere
+      document.addEventListener('click', function(evt) {
+        if (evt.target.closest('.ol-contextmenu') === null) {
+          contextMenuContainer.style.display = 'none';
+        }
+      });
+
+      // Hide context menu when dragging the map
+      gdalMap.on('pointerdrag', function() {
+        contextMenuContainer.style.display = 'none';
+      });
+    }
+    </script>
+  </div>
+</section>
+</body>
+{% include 'sections/footer.html' %}
+</html>

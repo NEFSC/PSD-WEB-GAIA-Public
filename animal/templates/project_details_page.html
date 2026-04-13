@@ -1,0 +1,648 @@
+{% load static %}
+{% include 'sections/header.html' %}
+
+<style>
+  .project-details-shell {
+    width: 70% !important;
+    max-width: 70% !important;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  @media (max-width: 63.99em) {
+    .project-details-shell {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+  }
+
+  .details-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  @media (min-width: 64em) {
+    .details-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  .status-pill {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+
+  .status-processing {
+    background: #fff1d2;
+    color: #3d2c00;
+  }
+
+  .status-loaded {
+    background: #d9f6dd;
+    color: #0b3d13;
+  }
+
+  .status-failed {
+    background: #f4dfe2;
+    color: #5c1111;
+  }
+
+  .limited-table-container {
+    max-height: 26rem;
+    overflow-y: auto;
+    overflow-x: auto;
+  }
+
+  .limited-table-container table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f0f0f0;
+  }
+
+  .table-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+  }
+
+  .table-pagination .usa-button {
+    margin: 0;
+    min-width: 5.5rem;
+  }
+
+  .table-pagination-status {
+    font-size: 0.9rem;
+    color: #3d4551;
+    min-width: 9rem;
+    text-align: center;
+  }
+
+  .table-page-size {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-right: auto;
+  }
+
+  .table-page-size label {
+    font-size: 0.9rem;
+    color: #3d4551;
+  }
+
+  .table-page-size select {
+    min-width: 4.5rem;
+    margin: 0;
+  }
+
+  .cogs-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  @media (min-width: 64em) {
+    .cogs-grid {
+      grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+      align-items: stretch;
+    }
+  }
+
+  .cog-map-shell {
+    border: 1px solid #dfe1e2;
+    border-radius: 0.25rem;
+    overflow: hidden;
+  }
+
+  .cog-map-header {
+    padding: 0.6rem 0.75rem;
+    background: #f0f0f0;
+    border-bottom: 1px solid #dfe1e2;
+    font-size: 0.9rem;
+    color: #1b1b1b;
+  }
+
+  .cog-map-header #cog-map-status {
+    color: #3d4551;
+    font-weight: 400;
+  }
+
+  #project-details-cog-map {
+    width: 100%;
+    height: 26rem;
+    background: #f8f9fa;
+  }
+
+  .cog-row-button {
+    all: unset;
+    cursor: pointer;
+    color: #005ea2;
+    text-decoration: underline;
+  }
+
+  .cog-row-button:hover {
+    color: #1a4480;
+  }
+
+  tr.cog-active-row td {
+    background: #cfe8ff !important;
+    box-shadow: inset 0 -1px 0 #99c7f2;
+  }
+
+  tr.cog-active-row td:first-child {
+    border-left: 0.25rem solid #005ea2;
+  }
+
+  tr.cog-active-row .cog-row-button {
+    color: #0b4778;
+    font-weight: 700;
+  }
+</style>
+
+<section class="grid-container usa-section padding-top-1 project-details-shell">
+  <h1 class="margin-bottom-0">Project Details</h1>
+
+  <div class="details-grid margin-top-2">
+    <div class="usa-card">
+      <div class="usa-card__container">
+        <div class="usa-card__header">
+          <h2 class="usa-card__heading">Project Info</h2>
+        </div>
+        <div class="usa-card__body">
+          <p><strong>Name:</strong> {{ project.label }}</p>
+          <p style="text-align: justify;"><strong>Description:</strong> {{ project.description|default:"No description available" }}</p>
+          <p><strong>Zoom:</strong> 1:{{ project.zoom_level.value|default:1250 }}</p>
+          <p>
+            {% if project.owner and project.owner.email %}
+              <strong>Contact:</strong> <a href="mailto:{{ project.owner.email }}" target="_blank">{{ project.owner.email }}</a>
+            {% elif project.owner %}
+              <strong>Contact:</strong> {{ project.owner.get_full_name|default:project.owner.username }}
+            {% else %}
+              <em>No owner assigned</em>
+            {% endif %}
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="usa-card">
+      <div class="usa-card__container">
+        <div class="usa-card__header">
+          <h2 class="usa-card__heading">Users With Access</h2>
+        </div>
+        <div class="usa-card__body">
+          {% if access_users %}
+            <ul class="usa-list">
+              {% for row in access_users %}
+                <li>
+                  {% if row.user__first_name or row.user__last_name %}
+                    {{ row.user__first_name }} {{ row.user__last_name }}
+                  {% else %}
+                    {{ row.user__username }}
+                  {% endif %}
+                  ({{ row.user__email|default:'No email' }})
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p>No access users found.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="usa-card">
+      <div class="usa-card__container">
+        <div class="usa-card__header">
+          <h2 class="usa-card__heading">Recent Load Imagery Requests</h2>
+        </div>
+        <div class="usa-card__body">
+          {% if recent_requests %}
+          <div id="requests-table-container" class="usa-table-container--scrollable limited-table-container">
+            <table id="requests-table" class="usa-table usa-table--striped">
+              <thead>
+                <tr>
+                  <th scope="col">AOI</th>
+                  <th scope="col">Catalog ID(s)</th>
+                  <th scope="col">Requested By</th>
+                  <th scope="col">Date / Time</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for req in recent_requests %}
+                <tr>
+                  <td>{{ req.aoi_name|default:'Unknown' }}</td>
+                  <td>{{ req.catalog_ids_display }}</td>
+                  <td>
+                    {% if req.requested_by_user %}
+                      {{ req.requested_by_user.get_full_name|default:req.requested_by_user.username }}
+                    {% else %}
+                      {{ req.requested_by_username|default:'Unknown' }}
+                    {% endif %}
+                  </td>
+                  <td>{{ req.requested_at|date:'Y-m-d H:i:s' }}</td>
+                  <td>
+                    {% if req.status == 'PROCESSING' %}
+                      <span class="status-pill status-processing">Processing</span>
+                    {% elif req.status == 'LOADED' %}
+                      <span class="status-pill status-loaded">Loaded</span>
+                    {% else %}
+                      <span class="status-pill status-failed">Failed</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div id="requests-pagination" class="table-pagination" aria-label="Imagery request table pagination">
+            <div class="table-page-size">
+              <label for="requests-page-size">Rows</label>
+              <select id="requests-page-size" class="usa-select">
+                <option value="10" selected>10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+              </select>
+            </div>
+            <button id="requests-prev" type="button" class="usa-button usa-button--outline">Previous</button>
+            <span id="requests-page-info" class="table-pagination-status">Page 1 of 1</span>
+            <button id="requests-next" type="button" class="usa-button usa-button--outline">Next</button>
+          </div>
+          {% else %}
+            <p>No in-progress imagery requests were found for this project.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="margin-top-3 cogs-grid">
+    <div>
+      <div class="usa-card">
+        <div class="usa-card__container">
+          <div class="usa-card__header">
+            <h2 class="usa-card__heading">COGs In This Project</h2>
+          </div>
+          <div class="usa-card__body">
+            {% if cogs %}
+            <div id="cogs-table-container" class="usa-table-container--scrollable limited-table-container">
+              <table id="cogs-table" class="usa-table usa-table--striped">
+                <thead>
+                  <tr>
+                    <th scope="col">COG</th>
+                    <th scope="col">Catalog ID</th>
+                    <th scope="col">Sensor</th>
+                    <th scope="col">Acquisition Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for cog in cogs %}
+                  <tr>
+                    <td>
+                      <button type="button" class="cog-row-button" data-cog-vendor="{{ cog.vendor_id }}">
+                        {{ cog.vendor_id }}
+                      </button>
+                    </td>
+                    <td>{{ cog.catalog_id }}</td>
+                    <td>{{ cog.sensor }}</td>
+                    <td>{% if cog.acquisition_date %}{{ cog.acquisition_date }}{% else %}Unknown{% endif %}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            <div id="cogs-pagination" class="table-pagination" aria-label="COG table pagination">
+              <div class="table-page-size">
+                <label for="cogs-page-size">Rows</label>
+                <select id="cogs-page-size" class="usa-select">
+                  <option value="10" selected>10</option>
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                </select>
+              </div>
+              <button id="cogs-prev" type="button" class="usa-button usa-button--outline">Previous</button>
+              <span id="cogs-page-info" class="table-pagination-status">Page 1 of 1</span>
+              <button id="cogs-next" type="button" class="usa-button usa-button--outline">Next</button>
+            </div>
+            {% else %}
+              <p>No COG-linked POIs were found in this project.</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="usa-card">
+        <div class="usa-card__container">
+          <div class="usa-card__header">
+            <h2 class="usa-card__heading">COG Preview Map</h2>
+          </div>
+          <div class="usa-card__body">
+            <div class="cog-map-shell">
+              <div class="cog-map-header"><span id="cog-map-status"></span></div>
+              <div id="project-details-cog-map"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.1.0/ol.css" />
+<script src="https://cdn.jsdelivr.net/npm/ol@v10.1.0/dist/ol.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/geotiff"></script>
+
+<script>
+  (function () {
+    var map = null;
+    var cogLayer = null;
+    var activeLoadToken = 0;
+
+    function ensureMapInitialized() {
+      if (map || !window.ol) {
+        return;
+      }
+
+      map = new ol.Map({
+        target: 'project-details-cog-map',
+        layers: [new ol.layer.Tile({ source: new ol.source.OSM() })],
+        view: new ol.View({ center: ol.proj.fromLonLat([0, 0]), zoom: 2 })
+      });
+
+      setTimeout(function () {
+        if (map) {
+          map.updateSize();
+          map.renderSync();
+        }
+      }, 0);
+    }
+
+    function setActiveCogRow(button) {
+      document.querySelectorAll('#cogs-table tbody tr').forEach(function (row) {
+        row.classList.remove('cog-active-row');
+      });
+
+      document.querySelectorAll('#cogs-table .cog-row-button').forEach(function (rowButton) {
+        rowButton.setAttribute('aria-current', 'false');
+      });
+
+      if (button) {
+        var row = button.closest('tr');
+        if (row) {
+          row.classList.add('cog-active-row');
+          button.setAttribute('aria-current', 'true');
+        }
+      }
+    }
+
+    function focusMapOnCogSource(source, vendorId, loadToken) {
+      if (!map || loadToken !== activeLoadToken) {
+        return;
+      }
+
+      var centered = false;
+      var view = map.getView();
+
+      // Preferred path: use GeoTIFF metadata to move the existing view,
+      // without replacing it (replacing can introduce strict constraints).
+      if (typeof source.getView === 'function') {
+        source.getView().then(function (viewOptions) {
+          if (!map || loadToken !== activeLoadToken || !viewOptions) {
+            return;
+          }
+
+          try {
+            if (viewOptions.extent) {
+              view.fit(viewOptions.extent, {
+                size: map.getSize(),
+                maxZoom: 14,
+                duration: 250,
+                padding: [16, 16, 16, 16]
+              });
+            } else if (viewOptions.center) {
+              view.setCenter(viewOptions.center);
+              if (typeof viewOptions.resolution === 'number' && isFinite(viewOptions.resolution)) {
+                view.setResolution(viewOptions.resolution);
+              }
+            }
+            map.updateSize();
+            map.renderSync();
+            centered = true;
+          } catch (err) {
+            console.warn('Could not apply GeoTIFF view for', vendorId, err);
+          }
+        }).catch(function (err) {
+          console.warn('GeoTIFF view metadata unavailable for', vendorId, err);
+        });
+      }
+
+      // Fallback path: fit to extent after a short delay.
+      setTimeout(function () {
+        if (centered || !map || loadToken !== activeLoadToken) {
+          return;
+        }
+
+        try {
+          var extent = source.getExtent();
+          if (extent && isFinite(extent[0]) && isFinite(extent[1]) && isFinite(extent[2]) && isFinite(extent[3])) {
+            map.getView().fit(extent, {
+              size: map.getSize(),
+              maxZoom: 14,
+              duration: 250,
+              padding: [16, 16, 16, 16]
+            });
+          }
+          map.updateSize();
+          map.renderSync();
+        } catch (err) {
+          console.warn('Could not auto-fit COG extent for', vendorId, err);
+        }
+      }, 175);
+    }
+
+    function loadCogOnMap(vendorId, button) {
+      ensureMapInitialized();
+      if (!map || !vendorId) {
+        return;
+      }
+
+      var statusEl = document.getElementById('cog-map-status');
+      statusEl.textContent = 'Loading ' + vendorId + '...';
+
+      activeLoadToken += 1;
+      var thisLoadToken = activeLoadToken;
+      var rawUrl = new URL('/cogs/' + vendorId + '/', window.location.origin).toString();
+      var encodedUrl = new URL('/cogs/' + encodeURIComponent(vendorId) + '/', window.location.origin).toString();
+      var candidateUrls = rawUrl === encodedUrl ? [rawUrl] : [rawUrl, encodedUrl];
+
+      function tryLoad(candidateIndex) {
+        if (thisLoadToken !== activeLoadToken) {
+          return;
+        }
+
+        var url = candidateUrls[candidateIndex];
+        var source = new ol.source.GeoTIFF({ sources: [{ url: url }] });
+        var hasAutoCentered = false;
+
+        source.on('change', function () {
+          if (thisLoadToken !== activeLoadToken) {
+            return;
+          }
+
+          var state = source.getState();
+          if (state === 'ready') {
+            if (hasAutoCentered) {
+              return;
+            }
+            hasAutoCentered = true;
+            setActiveCogRow(button);
+            statusEl.textContent = 'Loaded ' + vendorId;
+            setTimeout(function () {
+              if (map) {
+                map.updateSize();
+                focusMapOnCogSource(source, vendorId, thisLoadToken);
+                map.renderSync();
+              }
+            }, 0);
+          } else if (state === 'error') {
+            if (candidateIndex + 1 < candidateUrls.length) {
+              statusEl.textContent = 'Retrying ' + vendorId + '...';
+              tryLoad(candidateIndex + 1);
+            } else {
+              statusEl.textContent = 'Failed to load ' + vendorId;
+            }
+          }
+        });
+
+        if (cogLayer) {
+          map.removeLayer(cogLayer);
+        }
+
+        cogLayer = new ol.layer.WebGLTile({ source: source });
+        map.addLayer(cogLayer);
+      }
+
+      tryLoad(0);
+    }
+
+    function initTablePagination(config) {
+      var table = document.getElementById(config.tableId);
+      var prevButton = document.getElementById(config.prevButtonId);
+      var nextButton = document.getElementById(config.nextButtonId);
+      var pageInfo = document.getElementById(config.pageInfoId);
+      var paginationContainer = document.getElementById(config.paginationId);
+      var pageSizeSelect = document.getElementById(config.pageSizeSelectId);
+
+      if (!table || !prevButton || !nextButton || !pageInfo || !paginationContainer || !pageSizeSelect) {
+        return;
+      }
+
+      var tbody = table.querySelector('tbody');
+      if (!tbody) {
+        return;
+      }
+
+      var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+      var rowsPerPage = parseInt(pageSizeSelect.value, 10) || config.rowsPerPage;
+      var totalPages = Math.max(1, Math.ceil(rows.length / rowsPerPage));
+      var currentPage = 1;
+
+      function recalculateTotalPages() {
+        totalPages = Math.max(1, Math.ceil(rows.length / rowsPerPage));
+      }
+
+      function render() {
+        recalculateTotalPages();
+        if (currentPage > totalPages) {
+          currentPage = totalPages;
+        }
+
+        var startIndex = (currentPage - 1) * rowsPerPage;
+        var endIndex = startIndex + rowsPerPage;
+
+        rows.forEach(function (row, index) {
+          row.style.display = index >= startIndex && index < endIndex ? '' : 'none';
+        });
+
+        pageInfo.textContent = 'Page ' + currentPage + ' of ' + totalPages;
+        prevButton.disabled = currentPage === 1;
+        nextButton.disabled = currentPage === totalPages;
+      }
+
+      prevButton.addEventListener('click', function () {
+        if (currentPage > 1) {
+          currentPage -= 1;
+          render();
+        }
+      });
+
+      nextButton.addEventListener('click', function () {
+        if (currentPage < totalPages) {
+          currentPage += 1;
+          render();
+        }
+      });
+
+      pageSizeSelect.addEventListener('change', function () {
+        rowsPerPage = parseInt(pageSizeSelect.value, 10) || config.rowsPerPage;
+        currentPage = 1;
+        render();
+      });
+
+      render();
+    }
+
+    initTablePagination({
+      tableId: 'cogs-table',
+      paginationId: 'cogs-pagination',
+      prevButtonId: 'cogs-prev',
+      nextButtonId: 'cogs-next',
+      pageInfoId: 'cogs-page-info',
+      pageSizeSelectId: 'cogs-page-size',
+      rowsPerPage: 10
+    });
+
+    initTablePagination({
+      tableId: 'requests-table',
+      paginationId: 'requests-pagination',
+      prevButtonId: 'requests-prev',
+      nextButtonId: 'requests-next',
+      pageInfoId: 'requests-page-info',
+      pageSizeSelectId: 'requests-page-size',
+      rowsPerPage: 10
+    });
+
+    var cogsTable = document.getElementById('cogs-table');
+    if (cogsTable) {
+      cogsTable.addEventListener('click', function (event) {
+        var button = event.target.closest('.cog-row-button');
+        if (!button) {
+          return;
+        }
+
+        loadCogOnMap(button.getAttribute('data-cog-vendor'), button);
+      });
+    }
+
+    ensureMapInitialized();
+
+    window.addEventListener('resize', function () {
+      if (map) {
+        map.updateSize();
+      }
+    });
+  })();
+</script>
+
+</body>
+{% include 'sections/footer.html' %}
+</html>

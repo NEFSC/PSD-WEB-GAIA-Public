@@ -1,0 +1,91 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>COG Preview</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin:0; padding:0; height:100vh; display:flex; }
+        #sidebar { width: 340px; border-right:1px solid #ccc; overflow-y:auto; padding:10px; box-sizing:border-box; }
+        #map-container { flex:1; position:relative; }
+        #map { position:absolute; top:0; left:0; right:0; bottom:0; }
+        .cog-item { padding:6px 8px; cursor:pointer; border-radius:4px; margin-bottom:4px; background:#f5f5f5; font-size:13px; line-height:1.3; }
+        .cog-item:hover { background:#e0e0e0; }
+        .cog-item.active { background:#1976d2; color:#fff; }
+        #status { padding:6px 8px; font-size:12px; color:#555; }
+        .error { color:#b00020; font-weight:bold; }
+    </style>
+        <!-- Use same OpenLayers version & includes as multiview page for consistency -->
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.1.0/ol.css" />
+        <script src="https://cdn.jsdelivr.net/npm/ol@v10.1.0/dist/ol.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/geotiff"></script>
+</head>
+<body>
+    <div id="sidebar">
+        <h3 style="margin-top:0;">COGs (Newest First)</h3>
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        {% if not cogs %}<div>No COGs found.</div>{% endif %}
+        <div id="cog-list">
+            {% for cog in cogs %}
+            <div class="cog-item" data-vendor="{{ cog.name }}">
+                <strong>{{ cog.name }}</strong><br>
+                <span style="font-size:11px;">{{ cog.last_modified|date:'Y-m-d H:i' }} | {{ cog.size|filesizeformat }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        <div id="status">Select a COG to preview.</div>
+    </div>
+    <div id="map-container">
+        <div id="map"></div>
+    </div>
+
+<script>
+// Encapsulate logic to only run after OpenLayers is available
+let map, cogLayer;
+
+window.initCogPreview = function() {
+    if (!window.ol) { console.warn('OpenLayers not yet available'); return; }
+    if (map) return; // already initialized
+    map = new ol.Map({
+        target: 'map',
+        layers: [ new ol.layer.Tile({ source: new ol.source.OSM() }) ],
+        view: new ol.View({ center: ol.proj.fromLonLat([0,0]), zoom: 2 })
+    });
+
+    function loadCOG(vendorId, element) {
+        document.querySelectorAll('.cog-item').forEach(el => el.classList.remove('active'));
+        if (element) element.classList.add('active');
+        const url = new URL(`/cogs/${vendorId}/`, window.location.origin).toString();
+        const statusEl = document.getElementById('status');
+        statusEl.textContent = `Loading ${vendorId} ...`;
+
+        const source = new ol.source.GeoTIFF({ sources: [{ url }] });
+        source.on('change', () => {
+            const state = source.getState();
+            if (state === 'ready') {
+                try {
+                    const extent = source.getExtent();
+                    if (extent) map.getView().fit(extent, { size: map.getSize(), maxZoom: 14 });
+                    statusEl.textContent = vendorId;
+                } catch { statusEl.textContent = `Loaded ${vendorId}`; }
+            } else if (state === 'error') {
+                statusEl.textContent = `Failed to load ${vendorId}`;
+            }
+        });
+        if (cogLayer) map.removeLayer(cogLayer);
+        cogLayer = new ol.layer.WebGLTile({ source });
+        map.addLayer(cogLayer);
+    }
+
+    document.getElementById('cog-list').addEventListener('click', (e) => {
+        const item = e.target.closest('.cog-item');
+        if (!item) return;
+        loadCOG(item.getAttribute('data-vendor'), item);
+    });
+};
+
+// Initialize when window loads to ensure OL is available
+window.addEventListener('load', () => { window.initCogPreview(); });
+</script>
+</body>
+</html>

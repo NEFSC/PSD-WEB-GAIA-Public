@@ -1,0 +1,114 @@
+{% load static %}
+{% include 'sections/header.html' %}
+<section class="grid-container usa-section  padding-top-0 width-full">
+    <div class="grid-row flex-justify-center">
+        <div class="grid-col-12 tablet:grid-col-10 desktop:grid-col-12">
+            <h1 class="margin-bottom-0">Annotate Batch List</h1>
+            {% if project %}
+                <p class="site-subheading margin-top-1" style="white-space: nowrap;">{{ project.label }}</p>
+            {% endif %}
+            <p>This page shows a list of COGs by Vendor ID.</p>
+            {% if cache_key and user.is_superuser %}
+            <div class="usa-alert usa-alert--info" role="alert">
+              <div class="usa-alert__body">
+                <p class="usa-alert__text">
+                    <strong>Cache Status:</strong> 
+                    {% if cache_hit %}
+                        <span style="color: green;">Cache Hit</span> - Data loaded from cache
+                    {% else %}
+                        <span style="color: orange;">Cache Miss</span> - Data loaded from database
+                    {% endif %}
+                    <br>
+                    <small>Cache Key: {{ cache_key }}</small>
+                    <br>
+                    <a href="/project/{{ project_id }}/multiview/clear-cache/" class="usa-button usa-button--outline usa-button--unstyled" 
+                       onclick="return confirm('Are you sure you want to clear the cache?')">Clear Cache</a>
+                </p>
+              </div>
+            </div>
+            {% endif %}
+            {% if page_obj %}
+            <div class="usa-alert usa-alert--info" role="alert">
+              <div class="usa-alert__body">
+                <p class="usa-alert__text">
+                    Found {{ page_obj.paginator.count }} COG{{ page_obj.paginator.count|pluralize }} within {% if project %}{{ project.label }}{% else %}this project{% endif %}.
+                </p>
+              </div>
+            </div>
+            {% endif %}
+            {% if not page_obj %}
+            <div class="usa-alert usa-alert--info" role="alert">
+              <div class="usa-alert__body">
+                <p class="usa-alert__text">
+                    No COGs found in this project.
+                </p>
+              </div>
+            </div>
+            {% else %}
+            <table class="usa-table usa-table--bordered usa-table--striped">
+                <thead>
+                    <tr>
+                        <th scope="col">#</th>
+                        <th scope="col">
+                            <a href="?sort={% if request.GET.sort == 'desc' %}asc{% else %}desc{% endif %}" class="usa-button usa-button--unstyled">
+                                Vendor ID
+                                {% if request.GET.sort == 'desc' %}
+                                    <svg class="usa-icon" aria-hidden="true" focusable="false" role="img"><use xlink:href="/static/uswds/img/sprite.svg#arrow_downward"></use></svg>
+                                {% else %}
+                                    <svg class="usa-icon" aria-hidden="true" focusable="false" role="img"><use xlink:href="/static/uswds/img/sprite.svg#arrow_upward"></use></svg>
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th scope="col">POI Count</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cog in page_obj %}
+                        <tr>
+                            <td>{{ forloop.counter0|add:page_obj.start_index }}</td>
+                            <td><a href="/project/{{ cog.project_id }}/multiview/{{ cog.id }}">{{ cog.id }}</a></td>
+                            <td>{{ cog.poi_count }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <nav aria-label="Pagination" class="usa-pagination">
+            <ul class="usa-pagination__list">
+            {% if page_obj.has_previous %}
+                <li class="usa-pagination__item usa-pagination__arrow">
+                <a class="usa-pagination__link" href="?page=1">
+                    <span class="usa-pagination__link-text">First</span>
+                </a>
+                </li>
+                <li class="usa-pagination__item usa-pagination__arrow">
+                <a class="usa-pagination__link" href="?page={{ page_obj.previous_page_number }}">
+                    <span class="usa-pagination__link-text">Previous</span>
+                </a>
+                </li>
+            {% endif %}
+
+            <li class="usa-pagination__item usa-pagination__page-no">
+                <span class="usa-pagination__link-text">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+            </li>
+
+            {% if page_obj.has_next %}
+                <li class="usa-pagination__item usa-pagination__arrow">
+                <a class="usa-pagination__link" href="?page={{ page_obj.next_page_number }}">
+                    <span class="usa-pagination__link-text">Next</span>
+                </a>
+                </li>
+                <li class="usa-pagination__item usa-pagination__arrow">
+                <a class="usa-pagination__link" href="?page={{ page_obj.paginator.num_pages }}">
+                    <span class="usa-pagination__link-text">Last</span>
+                </a>
+                </li>
+            {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</section>
+</body>
+{% include 'sections/footer.html' %}
+</html>

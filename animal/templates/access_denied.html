@@ -1,0 +1,13 @@
+{% load static %}
+{% include 'sections/header.html' %}
+<body>
+    <section class="usa-section">
+        <div class="grid-container">
+            <h1>Access Denied</h1>
+            <p>You do not have permission to view this page.</p>
+            <a href="{% url 'landing_page' %}" class="usa-button">Return to Home</a>
+        </div>
+    </section>
+</body>
+{% include 'sections/footer.html' %}
+</html>
