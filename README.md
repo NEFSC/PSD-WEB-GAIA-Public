@@ -1,4 +1,4 @@
-# GAIA's WHALE TCPED
+# Geospatial Artificial Intelligence for Animals 
 ---
 
 ### Description
@@ -6,7 +6,7 @@ Geospatial Artificial Intelligence for Animals
 
 The Geospatial Artificial Intelligence for Animals (GAIA) program brings together a broad coalition of partners working to advance satellite-based marine wildlife monitoring through scalable cloud computing, remote sensing, and emerging artificial intelligence workflows. Collaborators include government agencies such as the National Oceanic and Atmospheric Administration (NOAA), U.S. Naval Research Laboratory, the Bureau of Ocean Energy Management (BOEM), and the U.S. Geological Survey; research institutions including the British Antarctic Survey; academic partners such as the University of Edinburgh and University of Minnesota; and private sector collaborators including Microsoft AI for Good Research Lab and Vantor.
 
-GAIA’s cloud application supports the ingestion, preprocessing, organization, and expert annotation of very high-resolution satellite imagery to facilitate marine wildlife detection and generate high-quality labeled training data for future AI-assisted workflows.
+Building on the original WHALE platform developed by Microsoft AI for Good in collaboration with NOAA, GAIA’s cloud application has been expanded to support the ingestion, tasking, preprocessing, organization, and expert annotation of very high-resolution satellite imagery, facilitating marine wildlife detection and generation of high-quality labeled training data for future AI-assisted workflows.
 
 GAIA's WHale Active Learning Environment (WHALE) Tasking, Collection, Processing, Annotation, and Dissimination (TCPED) Application is a port of the original [WHALE](https://github.com/microsoft/whale), created by Microsoft AI for Good in collaboration with NOAA, to GeoDjango and expanded to handle satellite imagery collection and dissimination needs of the GAIA team.
 
