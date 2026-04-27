@@ -1,5 +1,4 @@
-# Geospatial Artificial Intelligence for Animals 
----
+# Geospatial Artificial Intelligence for Animals
 
 ### Description
 Geospatial Artificial Intelligence for Animals 
